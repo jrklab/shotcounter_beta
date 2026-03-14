@@ -287,7 +287,6 @@ function onShotDetected(shot, hostNow = performance.now(), latestDeviceTs_ms = n
     hostEventTs,
     comment:        '',
   });
-  });
 
   const scoreText = `${S.sessionMakes} out of ${S.sessionTotal}`;
   if (isMake) {
