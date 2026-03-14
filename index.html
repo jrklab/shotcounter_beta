@@ -120,7 +120,7 @@
       </div>
 
       <p class="setup-note">
-        Both BLE sensor and camera are required to start a session.
+        Both BLE and camera are required to start a session.
       </p>
 
       <div style="flex:1"></div>
@@ -260,6 +260,16 @@
     </div>
 
     <div class="ota-body">
+
+      <!-- ── BLE connect row ─────────────────────────────────────────────── -->
+      <div class="setup-row">
+        <span class="setup-icon">📶</span>
+        <div class="setup-info">
+          <div class="setup-label">Device (BLE)</div>
+          <div id="di-ble-state" class="setup-state">⛕ Not connected</div>
+        </div>
+        <button id="di-ble-btn" class="btn btn-blue btn-sm">Connect</button>
+      </div>
 
       <!-- ── Static device information ───────────────────────────────────────── -->
       <div class="di-section-title">Device Information</div>

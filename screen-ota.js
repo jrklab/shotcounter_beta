@@ -3,18 +3,10 @@
 import { OtaUpdater }                  from './ota-ble.js';
 import { S, APP_REVISION }             from './state.js';
 import { showScreen, setEl, showToast } from './utils.js';
+import { ble }                         from './screen-active.js';
 
-// ── Wire screen ───────────────────────────────────────────────────────────────
-export function wireOtaScreen() {
-  document.getElementById('ota-back-btn')?.addEventListener('click', () => showScreen('dashboard'));
-  document.getElementById('ota-check-btn')?.addEventListener('click', loadOtaScreen);
-  document.getElementById('ota-update-btn')?.addEventListener('click', runOtaUpdate);
-  document.getElementById('di-baseline-btn')?.addEventListener('click', computeBaseline);
-}
-
-// ── Load / check latest version ───────────────────────────────────────────────
-export async function loadOtaScreen() {
-  // ── Populate static device info ─────────────────────────────────────────
+// ── BLE connect button state ──────────────────────────────────────────────────
+function refreshDeviceInfo() {
   const meta = window.deviceMeta;
   setEl('di-info-manufacturer', meta?.manufacturer || '–');
   setEl('di-info-model',        meta?.model        || '–');
@@ -22,10 +14,59 @@ export async function loadOtaScreen() {
   setEl('di-info-fw',           meta?.fwRevision   || S.deviceFwVer || '–');
   setEl('di-info-mac',          meta?.systemId     || '–');
   setEl('di-info-app',          APP_REVISION);
-
-  // ── Live readings ──────────────────────────────────────────────────────
   setEl('di-info-batt', S.lastBattMv ? `${(S.lastBattMv / 1000).toFixed(2)} V` : '–');
   setEl('di-info-temp', S.lastTempC  != null ? `${S.lastTempC.toFixed(1)} °C` : '–');
+}
+
+function refreshBleRow() {
+  const btn   = document.getElementById('di-ble-btn');
+  const state = document.getElementById('di-ble-state');
+  if (!btn || !state) return;
+  if (S.isBleConnected) {
+    btn.textContent = 'Disconnect';
+    btn.className   = 'btn btn-red btn-sm';
+    state.textContent = '✅ Connected';
+    state.classList.add('ok');
+    // Refresh device info fields now that meta is available
+    refreshDeviceInfo();
+  } else {
+    btn.textContent = 'Connect';
+    btn.className   = 'btn btn-blue btn-sm';
+    state.textContent = '⛕ Not connected';
+    state.classList.remove('ok');
+  }
+}
+// Expose so onBleStatus (screen-active.js) can call it when the DI page is open
+window._updateOtaBleStatus = refreshBleRow;
+
+// ── Wire screen ───────────────────────────────────────────────────────────────
+export function wireOtaScreen() {
+  document.getElementById('ota-back-btn')?.addEventListener('click', () => {
+    if (S.isBleConnected) ble.disconnect();
+    showScreen('dashboard');
+  });
+  document.getElementById('ota-check-btn')?.addEventListener('click', loadOtaScreen);
+  document.getElementById('ota-update-btn')?.addEventListener('click', runOtaUpdate);
+  document.getElementById('di-baseline-btn')?.addEventListener('click', computeBaseline);
+  document.getElementById('di-ble-btn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('di-ble-btn');
+    if (S.isBleConnected) {
+      ble.disconnect();
+    } else {
+      if (btn) btn.disabled = true;
+      try { await ble.connect(); } catch (_) {}
+      if (btn) btn.disabled = false;
+    }
+  });
+}
+
+// ── Load / check latest version ───────────────────────────────────────────────
+export async function loadOtaScreen() {
+  // Sync BLE row immediately
+  refreshBleRow();
+
+  // ── Populate static device info ─────────────────────────────────────────
+  refreshDeviceInfo();
 
   // ── Firmware version check ────────────────────────────────────────────────
   setEl('ota-device-version', S.deviceFwVer || '–');
@@ -63,6 +104,8 @@ async function runOtaUpdate() {
 
   try {
     await S.ota.downloadFirmware();
+    // Disconnect sensor BLE before OTA takes over
+    if (S.isBleConnected) ble.disconnect();
     await S.ota.connect();
     const success = await S.ota.flash();
     if (success) showToast('Firmware updated successfully!', 'success');

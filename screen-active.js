@@ -320,6 +320,9 @@ function onBleStatus(state, detail) {
   if (typeof window._updatePracticeReadyGate === 'function') {
     window._updatePracticeReadyGate();
   }
+  if (typeof window._updateOtaBleStatus === 'function') {
+    window._updateOtaBleStatus();
+  }
 }
 
 function updateDeviceInfoBar(info) {
