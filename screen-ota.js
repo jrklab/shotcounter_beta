@@ -38,6 +38,8 @@ function refreshBleRow() {
 }
 // Expose so onBleStatus (screen-active.js) can call it when the DI page is open
 window._updateOtaBleStatus = refreshBleRow;
+// Expose so onBlePacket (screen-active.js) can push live batt/temp to DI page
+window._updateOtaReadings  = refreshDeviceInfo;
 
 // ── Wire screen ───────────────────────────────────────────────────────────────
 export function wireOtaScreen() {

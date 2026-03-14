@@ -223,17 +223,19 @@ function onBlePacket(dataView) {
     updateDeviceInfoBar(deviceInfo);
   }
 
-  if (!batch || S.activeScreen !== 'practice-active') return;
+  if (!batch) return;
 
-  const hostNow            = hostMs;
+  // Always maintain sensorWindow — needed for Device Info baseline even when not in practice
+  const hostNow = hostMs;
   batch.forEach(s => { s.host_ts = hostNow; });
-  const latestDeviceTs_ms  = batch[batch.length - 1].mpu_ts;
-
-  // Rolling sensor window
   S.sensorWindow.push(...batch);
   if (S.sensorWindow.length > SENSOR_WINDOW_SLOTS) {
     S.sensorWindow.splice(0, S.sensorWindow.length - SENSOR_WINDOW_SLOTS);
   }
+
+  if (S.activeScreen !== 'practice-active') return;
+
+  const latestDeviceTs_ms  = batch[batch.length - 1].mpu_ts;
   S.allSensorData.push(...batch);
 
   const cal     = classifier.calibrator;
@@ -332,5 +334,5 @@ function updateDeviceInfoBar(info) {
   setEl('di-hw',   hw);
   setEl('di-fw',   fw);
   setEl('di-batt', info.battMv ? `${(info.battMv / 1000).toFixed(2)} V` : '–');
-  setEl('di-temp', `${info.tempC}°C`);
-}
+  setEl('di-temp', `${info.tempC}°C`);  // Refresh Device Info page live readings if it is currently open
+  if (typeof window._updateOtaReadings === 'function') window._updateOtaReadings();}
