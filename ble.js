@@ -29,22 +29,28 @@ const CHAR_UUID    = 'e3a00002-1d1e-4c0c-b23a-9d9a4c5f7ad1';
  * @returns {Promise<{manufacturer, model, hwRevision, fwRevision, systemId}|null>}
  */
 async function readDeviceMetadata(server) {
+  // Mobile Web Bluetooth (Chrome Android, Safari iOS) allows only ONE ATT
+  // operation in-flight at a time.  Promise.all() causes requests 2-5 to
+  // fail immediately with "GATT operation already in progress".  Read each
+  // characteristic sequentially to work on all platforms.
+  const read = async (dis, uuid) => {
+    try {
+      const chr = await dis.getCharacteristic(uuid);
+      const val = await chr.readValue();
+      return new TextDecoder().decode(val);
+    } catch (_) { return ''; }
+  };
+
   try {
     const dis = await server.getPrimaryService('device_information');
-    const decode = (dv) => new TextDecoder().decode(dv);
-
-    const [mfr, model, hwRev, fwRev, sysId] = await Promise.all([
-      dis.getCharacteristic(0x2A29).then(c => c.readValue()).then(decode).catch(() => ''),
-      dis.getCharacteristic(0x2A24).then(c => c.readValue()).then(decode).catch(() => ''),
-      dis.getCharacteristic(0x2A27).then(c => c.readValue()).then(decode).catch(() => ''),
-      dis.getCharacteristic(0x2A26).then(c => c.readValue()).then(decode).catch(() => ''),
-      dis.getCharacteristic(0x2A23).then(c => c.readValue()).then(decode).catch(() => ''),
-    ]);
-
+    const mfr   = await read(dis, 0x2A29);
+    const model  = await read(dis, 0x2A24);
+    const hwRev  = await read(dis, 0x2A27);
+    const fwRev  = await read(dis, 0x2A26);
+    const sysId  = await read(dis, 0x2A23);
     const meta = { manufacturer: mfr, model, hwRevision: hwRev, fwRevision: fwRev, systemId: sysId };
     console.log('[BLE] DIS device info:', meta);
     return meta;
-
   } catch (e) {
     console.warn('[BLE] DIS read failed:', e.message);
     return null;
