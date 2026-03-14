@@ -11,9 +11,8 @@
  *   6. Wait for the device to reboot (STATUS: "OTA_OK" or similar).
  *
  * Firmware source:
- *   GitHub Releases API: https://api.github.com/repos/jrklab/shotcounter_beta/releases/latest
- *   The latest release must have a firmware.bin asset attached.
- *   Version is read from the release tag name (e.g. tag "v1.0.2" → version "1.0.2").
+ *   https://raw.githubusercontent.com/jrklab/shotcounter_beta/main/fw/firmware.bin
+ *   Version string read from fw/version.txt in the same branch.
  *
  * Usage (ES module):
  *   import { OtaUpdater } from './ota-ble.js';
@@ -36,7 +35,8 @@ const CMD_END           = 0x02;
 
 const CHUNK_SIZE        = 496;  // MTU(512) - 3 ATT header - 13 padding, same as Python script
 // I will copy this to a public repo at shotcounter/. I will change the URL manually to reflect that. Don't change it back
-const RELEASES_API_URL  = 'https://api.github.com/repos/jrklab/shotcounter_beta/releases/latest';
+const FIRMWARE_URL      = 'https://raw.githubusercontent.com/jrklab/shotcounter_beta/main/fw/firmware.bin';
+const VERSION_URL       = 'https://raw.githubusercontent.com/jrklab/shotcounter_beta/main/fw/version.txt';
 
 // ── Sensor data service (also needed in optional services list for OTA flow) ──
 const SENSOR_SERVICE_UUID = 'e3a00001-1d1e-4c0c-b23a-9d9a4c5f7ad1';
@@ -61,32 +61,27 @@ export class OtaUpdater {
 
   /**
    * Query GitHub Releases API for the latest firmware asset.
-   * The release must have an asset named "firmware.bin" attached.
-   * Version is derived from the release tag name (strips leading "v" or "fw/v").
    * @returns {{ version: string, size: number, tagName: string, downloadUrl: string }}
    */
   async fetchLatestRelease() {
     this._onStatus('Checking for latest firmware…');
 
-    const resp = await fetch(RELEASES_API_URL, {
-      headers: { 'Accept': 'application/vnd.github+json' },
-    });
-    if (!resp.ok) throw new Error(`GitHub API error ${resp.status}: ${await resp.text()}`);
+    // Read version string from fw/version.txt in the repo
+    let version = 'unknown';
+    try {
+      const vResp = await fetch(VERSION_URL);
+      if (vResp.ok) version = (await vResp.text()).trim();
+    } catch (_) { /* version stays 'unknown' */ }
 
-    const release = await resp.json();
-    const tagName = release.tag_name ?? '';
-    // Accept tags like "v1.0.2", "fw/v1.0.2", "fw/1.0.2"
-    const version = tagName.replace(/^(?:fw\/)?v?/, '') || 'unknown';
+    // HEAD request to determine file size without downloading the binary
+    const headResp = await fetch(FIRMWARE_URL, { method: 'HEAD' });
+    if (!headResp.ok) {
+      throw new Error(`Firmware not found (HTTP ${headResp.status}): ${FIRMWARE_URL}`);
+    }
+    const cl   = headResp.headers.get('content-length');
+    const size = cl ? parseInt(cl, 10) : 0;
 
-    const asset = release.assets?.find(a => a.name === 'firmware.bin');
-    if (!asset) throw new Error(`No firmware.bin asset found in release "${tagName}". Attach firmware.bin to the GitHub Release.`);
-
-    this._releaseInfo = {
-      version,
-      tagName,
-      size:        asset.size,
-      downloadUrl: asset.browser_download_url,
-    };
+    this._releaseInfo = { version, size, downloadUrl: FIRMWARE_URL };
     return { ...this._releaseInfo };
   }
 
