@@ -155,8 +155,8 @@ function computeBaseline() {
   // All paired samples are included regardless of distance value — only signal rate is needed
   const tofSamples  = win.filter(s => s.distance !== 0xFFFE);
   const hasToF      = tofSamples.length >= MIN_TOF;
-  // signal_rate is 9.7 fixed-point: divide by 128 to convert to MCPS
-  const signalMcps  = hasToF ? avg(tofSamples.map(s => s.signal_rate)) : null;
+  // signal_rate is 9.7 fixed-point: divide by 128 to convert to MCPS, removed 1/128 to make it consistent
+  const signalRate  = hasToF ? avg(tofSamples.map(s => s.signal_rate)) : null;
 
   const mpuLabel = `Accel (g) — ${win.length} samples`;
   const tofLabel = hasToF ? `ToF Signal Rate — ${tofSamples.length} samples` : 'ToF Signal Rate';
@@ -172,7 +172,7 @@ function computeBaseline() {
       <thead><tr><th colspan="2">${tofLabel}</th></tr></thead>
       <tbody>
         ${hasToF
-          ? `<tr><td colspan="2">${signalMcps.toFixed(3)} MCPS</td></tr>`
+          ? `<tr><td colspan="2">${signalRate.toFixed(3)}</td></tr>`
           : `<tr><td colspan="2" class="di-baseline-warn">No valid ToF data</td></tr>`
         }
       </tbody>
