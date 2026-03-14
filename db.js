@@ -130,25 +130,6 @@ export async function uploadSessionVideo(uid, sessionId, videoBlob, mimeType) {
   return getDownloadURL(storRef);
 }
 
-// ── Practice summary JSON upload ─────────────────────────────────────────────
-
-/**
- * Upload the practice summary JSON to Firebase Storage.
- * Stored at: json/{uid}/{sessionId}/practice_summary.json
- *
- * @param {string} uid
- * @param {string} sessionId
- * @param {Blob}   summaryBlob   application/json blob
- * @returns {Promise<string>}   Public download URL
- */
-export async function uploadPracticeSummary(uid, sessionId, summaryBlob) {
-  const path    = `json/${uid}/${sessionId}/practice_summary.json`;
-  const storRef = ref(storage, path);
-  const meta    = { contentType: 'application/json' };
-  await uploadBytes(storRef, summaryBlob, meta);
-  return getDownloadURL(storRef);
-}
-
 // ── Shot document ────────────────────────────────────────────────────────────
 
 /**
@@ -236,7 +217,7 @@ export async function fetchAllShots(uid) {
   const q    = query(
     collection(db, 'shots'),
     where('userId', '==', uid),
-    orderBy('timestamp', 'asc'),
+    orderBy('createdAt', 'asc'),
   );
   const snap = await getDocs(q);
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));

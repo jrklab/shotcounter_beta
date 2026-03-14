@@ -74,28 +74,6 @@ export function wirePracticeSetup() {
   }
   // Exposed so BLE status changes (onBleStatus) can trigger a gate re-check
   window._updatePracticeReadyGate = updateReadyGate;
-
-  // Exposed so onBleStatus can refresh the device-info panel after BLE connects
-  window._updateDeviceMetaDisplay = function () {
-    const panel = document.getElementById('setup-device-meta');
-    const text  = document.getElementById('setup-meta-text');
-    const meta  = window.deviceMeta;
-    if (!panel || !text) return;
-    if (!meta) {
-      panel.style.display = 'none';
-      return;
-    }
-    panel.style.display = '';
-    // Build a compact multi-line summary — omit empty values
-    const lines = [
-      meta.manufacturer && `Manufacturer:  ${meta.manufacturer}`,
-      meta.model        && `Model:         ${meta.model}`,
-      meta.hwRevision   && `HW Revision:   ${meta.hwRevision}`,
-      meta.fwRevision   && `FW Revision:   ${meta.fwRevision}`,
-      meta.systemId     && `MAC:           ${meta.systemId}`,
-    ].filter(Boolean);
-    text.textContent = lines.join('\n');
-  };
 }
 
 export function resetPracticeSetup() {

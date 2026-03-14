@@ -94,16 +94,6 @@
         <button id="setup-ble-btn" class="btn btn-blue btn-sm">Connect</button>
       </div>
 
-      <!-- Device info panel — shown after BLE connects, populated from DIS -->
-      <div id="setup-device-meta" class="setup-row" style="display:none">
-        <span class="setup-icon">ℹ️</span>
-        <div class="setup-info" style="flex:1">
-          <div class="setup-label">Device Info</div>
-          <div id="setup-meta-text" class="setup-state"
-               style="font-size:0.75rem; line-height:1.6; white-space:pre-line"></div>
-        </div>
-      </div>
-
       <!-- Camera (required) -->
       <div class="setup-row">
         <span class="setup-icon">📷</span>
@@ -146,6 +136,12 @@
     <video id="active-video" autoplay muted playsinline></video>
 
     <div class="active-overlay">
+      <div class="active-di">
+        HW&nbsp;<span id="di-hw">–</span>&emsp;
+        FW&nbsp;<span id="di-fw">–</span>&emsp;
+        🔋&nbsp;<span id="di-batt">–</span>&emsp;
+        🌡&nbsp;<span id="di-temp">–</span>
+      </div>
       <div class="active-score-block">
         <div id="active-score-row">
           <span id="active-makes">0</span>
@@ -160,12 +156,6 @@
       </div>
 
       <div class="active-footer">
-        <div class="active-di">
-          HW&nbsp;<span id="di-hw">–</span>&emsp;
-          FW&nbsp;<span id="di-fw">–</span>&emsp;
-          🔋&nbsp;<span id="di-batt">–</span>&emsp;
-          🌡&nbsp;<span id="di-temp">–</span>
-        </div>
         <button id="active-stop-btn" class="btn btn-red">🛑&nbsp; Stop Practice</button>
         <button id="active-restart-btn" class="btn btn-dark" style="width:min(100%,240px);font-size:0.95rem;padding:12px">🔄&nbsp; Restart Practice</button>
       </div>

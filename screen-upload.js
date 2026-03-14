@@ -133,6 +133,7 @@ export async function startUpload() {
         createdAt:     Timestamp.now(),
         durationSec:   durSec,
       },
+      createdAt:                 Timestamp.now(),
       sensor_data_url:           sensorDataUrl,
       recording_start_global_ms: S.recordingStartGlobalMs,
       recording_start_s:         S.recordingStartMs / 1000,

@@ -223,8 +223,12 @@ html, body {
 }
 #active-stop-btn { width: min(100%,240px); font-size: 1.1rem; padding: 16px; }
 
-.active-di { display: flex; gap: 14px; font-size: 0.72rem; color: #334; }
-.active-di span { color: #556; }
+.active-di {
+  display: flex; gap: 14px; font-size: 0.72rem;
+  color: var(--muted); padding: 8px 16px;
+  align-items: center; flex-shrink: 0;
+}
+.active-di span { color: var(--text); }
 
 /* ══ REVIEW ════════════════════════════════════════════════════════ */
 .review-body { flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 12px; }

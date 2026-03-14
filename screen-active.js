@@ -318,10 +318,6 @@ function onBleStatus(state, detail) {
   if (typeof window._updatePracticeReadyGate === 'function') {
     window._updatePracticeReadyGate();
   }
-  // Refresh device-info panel with DIS values if the panel is visible
-  if (typeof window._updateDeviceMetaDisplay === 'function') {
-    window._updateDeviceMetaDisplay();
-  }
 }
 
 function updateDeviceInfoBar(info) {
