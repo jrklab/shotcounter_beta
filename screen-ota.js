@@ -128,29 +128,54 @@ async function runOtaUpdate() {
 
 // ── Sensor baseline ───────────────────────────────────────────────────────────────
 function computeBaseline() {
-  const samples = S.sensorWindow;
   const el = document.getElementById('di-baseline-result');
   if (!el) return;
-  if (!samples || samples.length < 10) {
-    el.textContent = '⚠️ Connect device and wait for sensor data (need ≥10 samples).';
+
+  const allSamples = S.sensorWindow;
+  const MPU_WINDOW = 400;   // 2 s at 200 Hz
+  const MIN_MPU    = 10;
+  const MIN_TOF    = 5;
+
+  if (!allSamples || allSamples.length < MIN_MPU) {
+    el.innerHTML = '<span class="di-baseline-warn">⚠️ Connect device and wait for sensor data (need ≥10 samples).</span>';
     return;
   }
-  const n = samples.length;
+
+  const win = allSamples.slice(-MPU_WINDOW);
   const avg = (arr) => arr.reduce((s, v) => s + v, 0) / arr.length;
-  const acX = avg(samples.map(s => s.accel?.[0] ?? 0));
-  const acY = avg(samples.map(s => s.accel?.[1] ?? 0));
-  const acZ = avg(samples.map(s => s.accel?.[2] ?? 0));
-  const gyX = avg(samples.map(s => s.gyro?.[0]  ?? 0));
-  const gyY = avg(samples.map(s => s.gyro?.[1]  ?? 0));
-  const gyZ = avg(samples.map(s => s.gyro?.[2]  ?? 0));
-  const dist = avg(samples.map(s => s.distance   ?? 0));
-  el.textContent =
-    `Samples : ${n}\n` +
-    `Accel X : ${acX.toFixed(4)} g\n` +
-    `Accel Y : ${acY.toFixed(4)} g\n` +
-    `Accel Z : ${acZ.toFixed(4)} g\n` +
-    `Gyro  X : ${gyX.toFixed(4)} °/s\n` +
-    `Gyro  Y : ${gyY.toFixed(4)} °/s\n` +
-    `Gyro  Z : ${gyZ.toFixed(4)} °/s\n` +
-    `ToF dist: ${dist.toFixed(0)} mm`;
+
+  const acX = avg(win.map(s => s.accel?.[0] ?? 0));
+  const acY = avg(win.map(s => s.accel?.[1] ?? 0));
+  const acZ = avg(win.map(s => s.accel?.[2] ?? 0));
+  const gyX = avg(win.map(s => s.gyro?.[0]  ?? 0));
+  const gyY = avg(win.map(s => s.gyro?.[1]  ?? 0));
+  const gyZ = avg(win.map(s => s.gyro?.[2]  ?? 0));
+
+  // Filter out no-slot (0xFFFE) and invalid (0xFFFF) ToF readings
+  const tofValid  = win.filter(s => Number.isFinite(s.distance) && s.distance < 0xFFFE);
+  const hasToF    = tofValid.length >= MIN_TOF;
+  const rangeMm   = hasToF ? avg(tofValid.map(s => s.distance))                 : null;
+  // signal_rate
+  const signalMcps = hasToF ? avg(tofValid.map(s => s.signal_rate))    : null;
+
+  const mpuLabel = `Accel (g) — ${win.length} samples`;
+  const tofLabel = hasToF ? `ToF Range — ${tofValid.length} samples` : 'ToF Range';
+
+  el.innerHTML = `
+    <table class="di-baseline-table">
+      <thead><tr><th>${mpuLabel}</th><th>Gyro (°/s)</th></tr></thead>
+      <tbody>
+        <tr><td>X: ${acX.toFixed(4)}</td><td>X: ${gyX.toFixed(4)}</td></tr>
+        <tr><td>Y: ${acY.toFixed(4)}</td><td>Y: ${gyY.toFixed(4)}</td></tr>
+        <tr><td>Z: ${acZ.toFixed(4)}</td><td>Z: ${gyZ.toFixed(4)}</td></tr>
+      </tbody>
+      <thead><tr><th>${tofLabel}</th><th>ToF Signal Rate</th></tr></thead>
+      <tbody>
+        ${hasToF
+          ? `<tr><td>${rangeMm.toFixed(0)} mm</td><td>${signalMcps.toFixed(3)} MCPS</td></tr>`
+          : `<tr><td colspan="2" class="di-baseline-warn">No valid ToF data</td></tr>`
+        }
+      </tbody>
+    </table>`;
+}
 }

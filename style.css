@@ -359,9 +359,24 @@ html, body {
 .di-label { font-size: 0.78rem; color: var(--muted); }
 .di-val   { font-size: 0.82rem; color: var(--text); font-weight: 600; font-family: monospace; }
 .di-baseline-result {
-  font-size: 0.78rem; color: var(--muted); white-space: pre;
-  font-family: monospace; min-height: 1.5em; padding: 2px 4px;
+  font-size: 0.78rem; color: var(--muted);
+  font-family: monospace; min-height: 1.5em;
+  width: 100%;
 }
+.di-baseline-table {
+  width: 100%; border-collapse: collapse; font-size: 0.78rem;
+  font-family: monospace; margin-top: 4px;
+}
+.di-baseline-table thead th {
+  background: var(--card-bg, #1e2130); color: var(--muted);
+  font-size: 0.72rem; font-weight: 600; text-align: left;
+  padding: 4px 8px; border-bottom: 1px solid var(--border, #2a2d3e);
+}
+.di-baseline-table tbody td {
+  padding: 3px 8px; color: var(--text); border-bottom: 1px solid var(--border, #2a2d3e);
+}
+.di-baseline-table tbody tr:last-child td { border-bottom: none; }
+.di-baseline-warn { color: var(--orange, #e67e22); font-style: italic; }
 
 .ota-note {
   font-size: 0.78rem; color: var(--muted); line-height: 1.5;
