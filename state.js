@@ -8,14 +8,14 @@ export const EVENT_PRE_MS        = 1500;   // ms before event for review window
 export const EVENT_POST_MS       = 2000;   // ms after event for review window
 
 // ── App revision — increment here when releasing a new web app version ────────
-export const APP_REVISION = 'v0.1.9';
+export const APP_REVISION = 'v0.1.10';
 
 // ── Beta detection — prefix session IDs when served from the beta app ─────────
-// shotcounter_beta Firebase hosting domains contain "beta" in the hostname.
+// Checks the full URL so "beta" is matched anywhere (hostname, path, etc.).
 // localhost is also treated as beta (dev/test traffic).
 export const IS_BETA = (() => {
-  const host = window.location.hostname;
-  return host === 'localhost' || host.includes('beta');
+  const url = window.location.href;
+  return url.includes('localhost') || url.includes('beta');
 })();
 
 // ── Shared mutable state ──────────────────────────────────────────────────────
