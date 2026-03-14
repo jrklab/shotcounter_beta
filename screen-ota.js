@@ -151,15 +151,15 @@ function computeBaseline() {
   const gyY = avg(win.map(s => s.gyro?.[1]  ?? 0));
   const gyZ = avg(win.map(s => s.gyro?.[2]  ?? 0));
 
-  // Filter out no-slot (0xFFFE) and invalid (0xFFFF) ToF readings
-  const tofValid  = win.filter(s => Number.isFinite(s.distance) && s.distance < 0xFFFE);
-  const hasToF    = tofValid.length >= MIN_TOF;
-  const rangeMm   = hasToF ? avg(tofValid.map(s => s.distance))                 : null;
-  // signal_rate
-  const signalMcps = hasToF ? avg(tofValid.map(s => s.signal_rate))    : null;
+  // Identify ToF-paired samples (0xFFFE = no slot assigned by firmware)
+  // All paired samples are included regardless of distance value — only signal rate is needed
+  const tofSamples  = win.filter(s => s.distance !== 0xFFFE);
+  const hasToF      = tofSamples.length >= MIN_TOF;
+  // signal_rate is 9.7 fixed-point: divide by 128 to convert to MCPS
+  const signalMcps  = hasToF ? avg(tofSamples.map(s => s.signal_rate)) : null;
 
   const mpuLabel = `Accel (g) — ${win.length} samples`;
-  const tofLabel = hasToF ? `ToF Range — ${tofValid.length} samples` : 'ToF Range';
+  const tofLabel = hasToF ? `ToF Signal Rate — ${tofSamples.length} samples` : 'ToF Signal Rate';
 
   el.innerHTML = `
     <table class="di-baseline-table">
@@ -169,10 +169,10 @@ function computeBaseline() {
         <tr><td>Y: ${acY.toFixed(4)}</td><td>Y: ${gyY.toFixed(4)}</td></tr>
         <tr><td>Z: ${acZ.toFixed(4)}</td><td>Z: ${gyZ.toFixed(4)}</td></tr>
       </tbody>
-      <thead><tr><th>${tofLabel}</th><th>ToF Signal Rate</th></tr></thead>
+      <thead><tr><th colspan="2">${tofLabel}</th></tr></thead>
       <tbody>
         ${hasToF
-          ? `<tr><td>${rangeMm.toFixed(0)} mm</td><td>${signalMcps.toFixed(3)} MCPS</td></tr>`
+          ? `<tr><td colspan="2">${signalMcps.toFixed(3)} MCPS</td></tr>`
           : `<tr><td colspan="2" class="di-baseline-warn">No valid ToF data</td></tr>`
         }
       </tbody>
