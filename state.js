@@ -8,7 +8,7 @@ export const EVENT_PRE_MS        = 1500;   // ms before event for review window
 export const EVENT_POST_MS       = 2000;   // ms after event for review window
 
 // ── App revision — increment here when releasing a new web app version ────────
-export const APP_REVISION = 'v0.1.0';
+export const APP_REVISION = 'v0.1.1';
 
 // ── Shared mutable state ──────────────────────────────────────────────────────
 // All screen modules import and mutate this object directly (S.foo = ...).
