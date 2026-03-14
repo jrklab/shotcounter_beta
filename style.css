@@ -48,9 +48,8 @@ html, body {
 }
 .screen-header h1 { font-size: 1.1rem; font-weight: 600; flex: 1; }
 #review-progress {
-  text-align: center; font-size: 1.6rem; font-weight: 700;
-  color: var(--text); letter-spacing: 0.04em;
-  padding: 6px 0 2px;
+  font-size: 1.1rem; font-weight: 700; color: var(--text);
+  white-space: nowrap; padding-right: 44px; /* clear fixed BLE icon */
 }
 .back-btn {
   background: none; border: none; color: #667; cursor: pointer;
