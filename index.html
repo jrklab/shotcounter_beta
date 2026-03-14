@@ -68,7 +68,7 @@
       <div class="dash-btn-group">
         <button id="dash-practice-btn" class="btn btn-orange dash-big-btn">🏀&nbsp; Practice Now</button>
         <button id="dash-history-btn"  class="btn btn-blue   dash-big-btn">📊&nbsp; Review Practice History</button>
-        <button id="dash-ota-btn"      class="btn btn-dark   dash-big-btn">⚙️&nbsp; Firmware Update</button>
+        <button id="dash-ota-btn"      class="btn btn-dark   dash-big-btn">📱&nbsp; Device Info</button>
       </div>
       <p class="app-version" id="app-version"></p>
     </div>
@@ -120,8 +120,7 @@
       </div>
 
       <p class="setup-note">
-        Both BLE sensor and camera are required to start a session.<br>
-        Video clips capture the 1.5 s before and 2 s after each shot.
+        Both BLE sensor and camera are required to start a session.
       </p>
 
       <div style="flex:1"></div>
@@ -257,10 +256,41 @@
   <div data-screen="ota" id="screen-ota">
     <div class="screen-header">
       <button class="back-btn" id="ota-back-btn">←</button>
-      <h1>Firmware Update</h1>
+      <h1>Device Info</h1>
     </div>
 
     <div class="ota-body">
+
+      <!-- ── Static device information ───────────────────────────────────────── -->
+      <div class="di-section-title">Device Information</div>
+      <div class="di-info-grid">
+        <div class="di-row"><span class="di-label">Manufacturer</span><span class="di-val" id="di-info-manufacturer">–</span></div>
+        <div class="di-row"><span class="di-label">Model Number</span><span class="di-val" id="di-info-model">–</span></div>
+        <div class="di-row"><span class="di-label">HW Revision</span><span class="di-val" id="di-info-hw">–</span></div>
+        <div class="di-row"><span class="di-label">FW Revision</span><span class="di-val" id="di-info-fw">–</span></div>
+        <div class="di-row"><span class="di-label">System ID (MAC)</span><span class="di-val" id="di-info-mac">–</span></div>
+        <div class="di-row"><span class="di-label">Web App Revision</span><span class="di-val" id="di-info-app">–</span></div>
+      </div>
+
+      <!-- ── Live sensor readings ───────────────────────────────────────────── -->
+      <div class="ota-version-row">
+        <div class="ota-version-card">
+          <div class="ota-ver-label">🔋 Battery</div>
+          <div class="ota-ver-val" id="di-info-batt">–</div>
+        </div>
+        <div class="ota-version-card">
+          <div class="ota-ver-label">🌡 Temperature</div>
+          <div class="ota-ver-val" id="di-info-temp">–</div>
+        </div>
+      </div>
+
+      <!-- ── Sensor baseline ───────────────────────────────────────────────── -->
+      <button id="di-baseline-btn" class="btn btn-dark">📏&nbsp; Compute Sensor Baseline</button>
+      <div id="di-baseline-result" class="di-baseline-result"></div>
+
+      <!-- ── Firmware update ───────────────────────────────────────────────── -->
+      <div class="di-section-divider">Firmware Update</div>
+
       <div class="ota-version-row">
         <div class="ota-version-card">
           <div class="ota-ver-label">Device Version</div>

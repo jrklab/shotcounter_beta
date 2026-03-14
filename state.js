@@ -26,8 +26,8 @@ export const S = {
 
   // ── Battery (mV, read from sensor packets) ──────────────────────────────────
   battStartMv:  null,   // first non-zero battery reading of the session
-  battEndMv:    null,   // most-recent battery reading
-
+  battEndMv:    null,   // most-recent battery reading  lastBattMv:   null,   // most-recent battery reading (any time, for Device Info page)
+  lastTempC:    null,   // most-recent temperature reading (any time)
   // ── BLE packet loss counter ─────────────────────────────────────────────────
   totalLostPackets: 0,  // accumulated from parser.parse() lostPackets across session
 

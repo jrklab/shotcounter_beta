@@ -1,7 +1,7 @@
 'use strict';
 
-import { OtaUpdater }             from './ota-ble.js';
-import { S }                      from './state.js';
+import { OtaUpdater }                  from './ota-ble.js';
+import { S, APP_REVISION }             from './state.js';
 import { showScreen, setEl, showToast } from './utils.js';
 
 // ── Wire screen ───────────────────────────────────────────────────────────────
@@ -9,10 +9,25 @@ export function wireOtaScreen() {
   document.getElementById('ota-back-btn')?.addEventListener('click', () => showScreen('dashboard'));
   document.getElementById('ota-check-btn')?.addEventListener('click', loadOtaScreen);
   document.getElementById('ota-update-btn')?.addEventListener('click', runOtaUpdate);
+  document.getElementById('di-baseline-btn')?.addEventListener('click', computeBaseline);
 }
 
 // ── Load / check latest version ───────────────────────────────────────────────
 export async function loadOtaScreen() {
+  // ── Populate static device info ─────────────────────────────────────────
+  const meta = window.deviceMeta;
+  setEl('di-info-manufacturer', meta?.manufacturer || '–');
+  setEl('di-info-model',        meta?.model        || '–');
+  setEl('di-info-hw',           meta?.hwRevision   || '–');
+  setEl('di-info-fw',           meta?.fwRevision   || S.deviceFwVer || '–');
+  setEl('di-info-mac',          meta?.systemId     || '–');
+  setEl('di-info-app',          APP_REVISION);
+
+  // ── Live readings ──────────────────────────────────────────────────────
+  setEl('di-info-batt', S.lastBattMv ? `${(S.lastBattMv / 1000).toFixed(2)} V` : '–');
+  setEl('di-info-temp', S.lastTempC  != null ? `${S.lastTempC.toFixed(1)} °C` : '–');
+
+  // ── Firmware version check ────────────────────────────────────────────────
   setEl('ota-device-version', S.deviceFwVer || '–');
   setEl('ota-latest-version', 'Checking…');
   setEl('ota-update-status', '');
@@ -64,4 +79,33 @@ async function runOtaUpdate() {
   } finally {
     S.ota.disconnect();
   }
+}
+
+// ── Sensor baseline ───────────────────────────────────────────────────────────────
+function computeBaseline() {
+  const samples = S.sensorWindow;
+  const el = document.getElementById('di-baseline-result');
+  if (!el) return;
+  if (!samples || samples.length < 10) {
+    el.textContent = '⚠️ Connect device and wait for sensor data (need ≥10 samples).';
+    return;
+  }
+  const n = samples.length;
+  const avg = (arr) => arr.reduce((s, v) => s + v, 0) / arr.length;
+  const acX = avg(samples.map(s => s.accel?.[0] ?? 0));
+  const acY = avg(samples.map(s => s.accel?.[1] ?? 0));
+  const acZ = avg(samples.map(s => s.accel?.[2] ?? 0));
+  const gyX = avg(samples.map(s => s.gyro?.[0]  ?? 0));
+  const gyY = avg(samples.map(s => s.gyro?.[1]  ?? 0));
+  const gyZ = avg(samples.map(s => s.gyro?.[2]  ?? 0));
+  const dist = avg(samples.map(s => s.distance   ?? 0));
+  el.textContent =
+    `Samples : ${n}\n` +
+    `Accel X : ${acX.toFixed(4)} g\n` +
+    `Accel Y : ${acY.toFixed(4)} g\n` +
+    `Accel Z : ${acZ.toFixed(4)} g\n` +
+    `Gyro  X : ${gyX.toFixed(4)} °/s\n` +
+    `Gyro  Y : ${gyY.toFixed(4)} °/s\n` +
+    `Gyro  Z : ${gyZ.toFixed(4)} °/s\n` +
+    `ToF dist: ${dist.toFixed(0)} mm`;
 }

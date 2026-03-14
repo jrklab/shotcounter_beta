@@ -225,7 +225,7 @@ html, body {
 
 .active-di {
   display: flex; gap: 14px; font-size: 0.72rem;
-  color: var(--muted); padding: 8px 16px;
+  color: var(--muted); padding: 44px 16px 8px;
   align-items: center; flex-shrink: 0;
 }
 .active-di span { color: var(--text); }
@@ -336,6 +336,32 @@ html, body {
   background: var(--blue); border-radius: 4px; transition: width 0.25s;
 }
 #ota-update-status { font-size: 0.85rem; color: var(--muted); min-height: 1.2em; }
+
+/* ══ DEVICE INFO page extras ══════════════════════════════════ */
+.di-section-title {
+  font-size: 0.7rem; color: var(--muted); text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+.di-section-divider {
+  font-size: 0.7rem; color: var(--muted); text-transform: uppercase;
+  letter-spacing: 0.07em; text-align: center;
+  border-top: 1px solid var(--border); padding-top: 10px; margin-top: 4px;
+}
+.di-info-grid {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+}
+.di-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 9px 14px; border-bottom: 1px solid var(--border);
+}
+.di-row:last-child { border-bottom: none; }
+.di-label { font-size: 0.78rem; color: var(--muted); }
+.di-val   { font-size: 0.82rem; color: var(--text); font-weight: 600; font-family: monospace; }
+.di-baseline-result {
+  font-size: 0.78rem; color: var(--muted); white-space: pre;
+  font-family: monospace; min-height: 1.5em; padding: 2px 4px;
+}
 
 .ota-note {
   font-size: 0.78rem; color: var(--muted); line-height: 1.5;

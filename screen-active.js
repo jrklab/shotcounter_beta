@@ -213,8 +213,10 @@ function onBlePacket(dataView) {
     // ── Battery tracking ─────────────────────────────────────────────────────
     if (deviceInfo.battMv > 0) {
       if (!S.battStartMv) S.battStartMv = deviceInfo.battMv;
-      S.battEndMv = deviceInfo.battMv;
+      S.battEndMv   = deviceInfo.battMv;
+      S.lastBattMv  = deviceInfo.battMv;
     }
+    if (deviceInfo.tempC != null) S.lastTempC = deviceInfo.tempC;
     // hw/fw version bytes in the packet are now RSVD zeros; use DIS values from window.deviceMeta
     S.deviceHwVer = window.deviceMeta?.hwRevision ?? '–';
     S.deviceFwVer = window.deviceMeta?.fwRevision ?? '–';
