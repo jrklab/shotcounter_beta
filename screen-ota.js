@@ -90,12 +90,12 @@ export async function loadOtaScreen() {
     const model = window.deviceMeta?.model;
     if (!model) {
       setEl('ota-latest-version', '–');
-      setEl('ota-update-status', '⚠️ Connect to the device via BLE first so the model can be detected.');
+      setEl('ota-update-status', '⚠️ Connect to the device first to detect the model.');
       if (updateBtn) updateBtn.disabled = true;
       return;
     }
     const info = await S.ota.fetchLatestRelease(model);
-    setEl('ota-latest-version', `v${info.version} (${(info.size / 1024).toFixed(0)} KB) — ${info.model}`);
+    setEl('ota-latest-version', `v${info.version}`);
     if (updateBtn) updateBtn.disabled = false;
   } catch (e) {
     setEl('ota-latest-version', 'Failed to check');
