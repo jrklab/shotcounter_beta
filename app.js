@@ -9,6 +9,7 @@
  *   screen-setup.js   — BLE + camera pairing gate
  *   screen-active.js  — live practice session
  *   screen-review.js  — shot label review carousel
+ *   screen-upload-options.js — upload options (location, comment, clip mode)
  *   screen-upload.js  — upload progress + data export
  *   screen-history.js — analytics: lifetime stats + trend chart + session list
  *   screen-ota.js     — OTA firmware update
@@ -22,6 +23,7 @@ import { wireAuthScreen, startAuthListener }    from './screen-auth.js';
 import { wirePracticeSetup, resetPracticeSetup } from './screen-setup.js';
 import { wirePracticeActive, ble }              from './screen-active.js';
 import { wireReviewScreen }                     from './screen-review.js';
+import { wireUploadOptions }                    from './screen-upload-options.js';
 import { wireHistoryScreen, loadHistory }       from './screen-history.js';
 import { wireOtaScreen, loadOtaScreen }         from './screen-ota.js';
 import { showScreen, showToast }                from './utils.js';
@@ -34,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
   wirePracticeSetup();
   wirePracticeActive();
   wireReviewScreen();
+  wireUploadOptions();
   wireHistoryScreen();
   wireOtaScreen();
 

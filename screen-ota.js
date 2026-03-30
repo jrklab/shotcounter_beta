@@ -47,7 +47,6 @@ export function wireOtaScreen() {
     if (S.isBleConnected) ble.disconnect();
     showScreen('dashboard');
   });
-  document.getElementById('ota-check-btn')?.addEventListener('click', loadOtaScreen);
   document.getElementById('ota-update-btn')?.addEventListener('click', runOtaUpdate);
   document.getElementById('di-baseline-btn')?.addEventListener('click', computeBaseline);
   document.getElementById('di-ble-btn')?.addEventListener('click', async () => {
@@ -96,7 +95,14 @@ export async function loadOtaScreen() {
     }
     const info = await S.ota.fetchLatestRelease(model);
     setEl('ota-latest-version', `v${info.version}`);
-    if (updateBtn) updateBtn.disabled = false;
+    // Only enable update if device is behind latest
+    const deviceVer = S.deviceFwVer?.replace(/^v/i, '') ?? '';
+    const latestVer  = info.version?.replace(/^v/i, '') ?? '';
+    const isBehind   = deviceVer !== '' && latestVer !== '' && deviceVer !== latestVer;
+    if (updateBtn) updateBtn.disabled = !isBehind;
+    if (!isBehind && deviceVer !== '') {
+      setEl('ota-update-status', '✅ Device firmware is up to date.');
+    }
   } catch (e) {
     setEl('ota-latest-version', 'Failed to check');
     setEl('ota-update-status', `Error: ${e.message}`);

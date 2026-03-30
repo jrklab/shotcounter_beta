@@ -7,18 +7,12 @@ import { initAudio }               from './utils.js';
 
 // ── Practice setup screen ─────────────────────────────────────────────────────
 export function wirePracticeSetup() {
-  const bleBtn       = document.getElementById('setup-ble-btn');
-  const camBtn       = document.getElementById('setup-cam-btn');
-  const startBtn     = document.getElementById('setup-start-btn');
-  const backBtn      = document.getElementById('setup-back-btn');
-  const bleState     = document.getElementById('setup-ble-state');
-  const camState     = document.getElementById('setup-cam-state');
-  const uploadToggle = document.getElementById('setup-upload-video-toggle');
-
-  if (uploadToggle) {
-    uploadToggle.checked = S.uploadVideoEnabled;
-    uploadToggle.addEventListener('change', () => { S.uploadVideoEnabled = uploadToggle.checked; });
-  }
+  const bleBtn   = document.getElementById('setup-ble-btn');
+  const camBtn   = document.getElementById('setup-cam-btn');
+  const startBtn = document.getElementById('setup-start-btn');
+  const backBtn  = document.getElementById('setup-back-btn');
+  const bleState = document.getElementById('setup-ble-state');
+  const camState = document.getElementById('setup-cam-state');
 
   backBtn?.addEventListener('click', () => {
     if (S.isBleConnected) ble.disconnect();
@@ -83,8 +77,6 @@ export function resetPracticeSetup() {
   if (camState) { camState.textContent = S.mediaStream    ? '✅ Camera ready' : '⭕ Not enabled';  camState.classList.toggle('ok', !!S.mediaStream); }
   const camBtn   = document.getElementById('setup-cam-btn');
   if (camBtn) camBtn.textContent = S.mediaStream ? 'Disable' : 'Enable';
-  const uploadToggle = document.getElementById('setup-upload-video-toggle');
-  if (uploadToggle) uploadToggle.checked = S.uploadVideoEnabled;
   const startBtn = document.getElementById('setup-start-btn');
   if (startBtn) startBtn.disabled = !(S.isBleConnected && S.videoEnabled);
 }

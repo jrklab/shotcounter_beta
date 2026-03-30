@@ -386,3 +386,21 @@ html, body {
   font-size: 0.78rem; color: var(--muted); line-height: 1.5;
   text-align: center; padding: 0 8px;
 }
+
+/* ══ UPLOAD OPTIONS ════════════════════════════════════════════════ */
+.text-input {
+  width: 100%; box-sizing: border-box;
+  background: #0d1117; border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); padding: 10px 12px; font-size: 0.9rem;
+  font-family: inherit; resize: vertical;
+}
+.text-input:focus { outline: none; border-color: var(--blue); }
+
+.uo-radio-group {
+  display: flex; flex-direction: column; gap: 10px;
+}
+.uo-radio-row {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 0.92rem; cursor: pointer;
+}
+.uo-radio-row input[type="radio"] { accent-color: var(--blue); width: 18px; height: 18px; }

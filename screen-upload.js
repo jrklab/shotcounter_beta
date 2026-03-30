@@ -2,23 +2,57 @@
 
 import { saveShot, saveSession,
          uploadSensorBin, uploadSessionJson,
-         uploadSessionVideo }                        from './db.js';
-import { loadSessionVideo, deleteSessionVideo }      from './video-store.js';
+         uploadClip }                               from './db.js';
 import { S, APP_REVISION }                          from './state.js';
 import { showScreen, setEl }                        from './utils.js';
 import { Timestamp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 
-// ── Upload orchestrator ───────────────────────────────────────────────────────
+// ── Extract a single shot clip from recorded video chunks ────────────────────
+// Uses a 1 s pre-window + 2 s post-window around video_clip_ts.
+const CLIP_PRE_MS  = 1000;
+const CLIP_POST_MS = 2000;
+
+function extractShotClip(ev) {
+  if (!S.allVideoChunks.length || ev.video_clip_ts == null) return null;
+  const evMs       = ev.video_clip_ts * 1000;   // seconds → ms from recording start
+  const clipStart  = evMs - CLIP_PRE_MS;
+  const clipEnd    = evMs + CLIP_POST_MS;
+  // Always include chunk[0] so the WebM header / init segment is present
+  const header     = S.allVideoChunks[0];
+  const body       = S.allVideoChunks.filter(
+    c => c !== header && c.startMs >= clipStart && c.startMs < clipEnd
+  );
+  if (!body.length) return null;
+  return new Blob(
+    [header.data, ...body.map(c => c.data)],
+    { type: S.videoMimeType || 'video/webm' },
+  );
+}
+
+// ── Upload orchestrator ──────────────────────────────────────────────────────────────
 export async function startUpload() {
   showScreen('practice-upload');
   const uid = S.user?.uid;
   if (!uid) { showScreen('dashboard'); return; }
 
-  // Steps: 1 sensor.bin + 1 labels JSON + N shots + optional 1 session video
-  const videoSteps = S.uploadVideoEnabled ? 1 : 0;
+  // Determine which events will have clips uploaded
+  const eventsForClip = (() => {
+    if (S.uploadVideoMode === 'none' || !S.allVideoChunks.length) return [];
+    if (S.uploadVideoMode === 'corrected') {
+      return S.sessionEvents.filter(
+        ev => ev.user_top !== ev.ai_top || ev.user_subtype !== ev.ai_subtype
+      );
+    }
+    return S.sessionEvents;  // 'all'
+  })();
+
+  // Steps: 1 sensor.bin + 1 labels JSON + N shots + M clips
+  const videoSteps = eventsForClip.length;
   const totalSteps = 2 + S.sessionEvents.length + videoSteps;
   let   doneSteps  = 0;
   const shotIds    = [];
+  // map of sessionEvents index → clip download URL
+  const clipUrls   = new Map();
 
   const progressEl = document.getElementById('upload-progress');
   const statusEl   = document.getElementById('upload-status');
@@ -55,7 +89,24 @@ export async function startUpload() {
   } catch (e) { console.warn('Labels JSON upload failed:', e); }
   doneSteps++; updateBar();
 
-  // ── 3. Save shot documents ────────────────────────────────────────────────
+  // ── 3. Upload per-shot video clips ────────────────────────────────────────
+  for (let i = 0; i < eventsForClip.length; i++) {
+    const ev        = eventsForClip[i];
+    const globalIdx = S.sessionEvents.indexOf(ev);
+    try {
+      setStatus(`Uploading clip ${i + 1} / ${eventsForClip.length}…`);
+      const blob = extractShotClip(ev);
+      if (blob) {
+        const url = await uploadClip(uid, S.sessionId, globalIdx, blob, S.videoMimeType);
+        clipUrls.set(globalIdx, url);
+      }
+    } catch (e) {
+      console.warn('Clip upload failed:', e);
+    }
+    doneSteps++; updateBar();
+  }
+
+  // ── 4. Save shot documents ────────────────────────────────────────────────
   for (let i = 0; i < S.sessionEvents.length; i++) {
     const ev = S.sessionEvents[i];
     const source = (ev.user_top === ev.ai_top && ev.user_subtype === ev.ai_subtype)
@@ -77,30 +128,10 @@ export async function startUpload() {
         device_event_ts: ev.device_event_ts,
         host_event_ts:   ev.host_event_ts_s,
         video_clip_ts:   ev.video_clip_ts ?? null,
-        video_clip_url:  null,
+        video_clip_url:  clipUrls.get(i) ?? null,
       });
       shotIds.push(id);
     } catch (e) { console.warn('Shot save failed:', e); }
-    doneSteps++; updateBar();
-  }
-
-  // ── 4. Upload session video (if enabled) ──────────────────────────────────
-  let sessionVideoUrl = null;
-  if (S.uploadVideoEnabled) {
-    let blob = S.videoSessionBlob;
-    if (!blob) { try { blob = await loadSessionVideo(S.sessionId); } catch (_) {} }
-    if (blob) {
-      try {
-        setStatus('Uploading session video…');
-        sessionVideoUrl = await uploadSessionVideo(uid, S.sessionId, blob, S.videoMimeType);
-        deleteSessionVideo(S.sessionId).catch(() => {});
-      } catch (e) {
-        console.warn('Session video upload failed:', e);
-        setStatus('⚠️ Video upload failed — data saved.');
-      }
-    } else {
-      setStatus('⚠️ No video data found — skipping video upload.');
-    }
     doneSteps++; updateBar();
   }
 
@@ -132,12 +163,14 @@ export async function startUpload() {
         user_total:    userTotal,
         createdAt:     Timestamp.now(),
         durationSec:   durSec,
+        comment:       S.sessionComment ?? '',
+        location:      S.sessionLocation ?? null,
       },
       createdAt:                 Timestamp.now(),
       sensor_data_url:           sensorDataUrl,
       recording_start_global_ms: S.recordingStartGlobalMs,
       recording_start_s:         S.recordingStartMs / 1000,
-      video_url:                 sessionVideoUrl,
+      video_url:                 null,
       shotIds,
     });
   } catch (e) { console.warn('Session save failed:', e); }

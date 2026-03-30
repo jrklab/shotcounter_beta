@@ -3,7 +3,7 @@
 import { S, EVENT_PRE_MS, EVENT_POST_MS } from './state.js';
 import { setEl, speak, showScreen }       from './utils.js';
 import { loadSessionVideo }               from './video-store.js';
-import { startUpload }                    from './screen-upload.js';
+import { initUploadOptions }              from './screen-upload-options.js';
 
 // ── Enter review screen ───────────────────────────────────────────────────────
 export async function showReviewScreen() {
@@ -133,8 +133,12 @@ export function renderReviewCard(announcement = null) {
   if (confirmBtn) {
     confirmBtn.onclick = () => {
       S.reviewIndex++;
-      if (S.reviewIndex >= S.sessionEvents.length) startUpload();
-      else renderReviewCard();
+      if (S.reviewIndex >= S.sessionEvents.length) {
+        showScreen('upload-options');
+        initUploadOptions();
+      } else {
+        renderReviewCard();
+      }
     };
   }
 }

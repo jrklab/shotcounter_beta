@@ -106,19 +106,6 @@
 
       <video id="setup-cam-preview" autoplay muted playsinline></video>
 
-      <!-- Upload video toggle -->
-      <div class="setup-row">
-        <span class="setup-icon">☁️</span>
-        <div class="setup-info">
-          <div class="setup-label">Upload Video Clips</div>
-          <div class="setup-state">Upload full session video to Firebase</div>
-        </div>
-        <label class="toggle-switch">
-          <input type="checkbox" id="setup-upload-video-toggle" />
-          <span class="toggle-track"></span>
-        </label>
-      </div>
-
       <p class="setup-note">
         Both BLE and camera are required to start a session.
       </p>
@@ -193,8 +180,55 @@
     </div>
   </div>
 
-  <!-- ════════════════════════════════════════════════════════════════ -->
-  <!-- UPLOAD                                                         -->
+  <!-- ════════════════════════════════════════════════════════════════ -->  <!-- UPLOAD OPTIONS                                                 -->
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <div data-screen="upload-options" id="screen-upload-options">
+    <div class="screen-header">
+      <h1>Upload Options</h1>
+    </div>
+
+    <div class="setup-body">
+
+      <!-- Location -->
+      <div class="di-section-title">Location</div>
+      <div class="setup-row">
+        <span class="setup-icon">📍</span>
+        <div class="setup-info">
+          <div id="uo-gps-status" class="setup-state">Press Detect to use GPS</div>
+        </div>
+        <button id="uo-gps-btn" class="btn btn-dark btn-sm">Detect</button>
+      </div>
+      <input type="text" id="uo-location-label" class="text-input"
+             placeholder="Location name (e.g. Home court, YMCA)" />
+
+      <!-- Comment -->
+      <div class="di-section-title">Session Notes</div>
+      <textarea id="uo-comment" class="text-input" rows="3"
+                placeholder="Add any context about this practice session…"></textarea>
+
+      <!-- Video clip upload -->
+      <div class="di-section-title">Video Clips</div>
+      <div class="uo-radio-group">
+        <label class="uo-radio-row">
+          <input type="radio" name="uo-video-mode" value="all" />
+          <span>Upload all video clips</span>
+        </label>
+        <label class="uo-radio-row">
+          <input type="radio" name="uo-video-mode" value="corrected" checked />
+          <span>Upload corrected shots only</span>
+        </label>
+        <label class="uo-radio-row">
+          <input type="radio" name="uo-video-mode" value="none" />
+          <span>Upload no video clips</span>
+        </label>
+      </div>
+
+      <div style="flex:1"></div>
+      <button id="uo-upload-btn" class="btn btn-blue">☁️&nbsp; Upload</button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════ -->  <!-- UPLOAD                                                         -->
   <!-- ════════════════════════════════════════════════════════════════ -->
   <div data-screen="practice-upload" id="screen-practice-upload">
     <div class="upload-body">
@@ -320,10 +354,6 @@
 
       <button id="ota-update-btn" class="btn btn-orange" disabled>
         ⬆&nbsp; Update Firmware
-      </button>
-
-      <button id="ota-check-btn" class="btn btn-dark btn-sm" style="width:auto;align-self:center">
-        Check for Update
       </button>
 
       <p class="ota-note">
