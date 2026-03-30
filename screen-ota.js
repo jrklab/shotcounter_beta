@@ -29,6 +29,8 @@ function refreshBleRow() {
     state.classList.add('ok');
     // Refresh device info fields now that meta is available
     refreshDeviceInfo();
+    // Auto-check firmware version now that we have device model
+    if (S.activeScreen === 'ota') checkFirmwareVersion();
   } else {
     btn.textContent = 'Connect';
     btn.className   = 'btn btn-blue btn-sm';
@@ -61,15 +63,8 @@ export function wireOtaScreen() {
   });
 }
 
-// ── Load / check latest version ───────────────────────────────────────────────
-export async function loadOtaScreen() {
-  // Sync BLE row immediately
-  refreshBleRow();
-
-  // ── Populate static device info ─────────────────────────────────────────
-  refreshDeviceInfo();
-
-  // ── Firmware version check ────────────────────────────────────────────────
+// ── Firmware version check ────────────────────────────────────────────────────
+async function checkFirmwareVersion() {
   setEl('ota-device-version', S.deviceFwVer || '–');
   setEl('ota-latest-version', 'Checking…');
   setEl('ota-update-status', '');
@@ -85,20 +80,19 @@ export async function loadOtaScreen() {
     (msg) => { setEl('ota-update-status', msg); console.log('[OTA]', msg); },
   );
 
+  const model = window.deviceMeta?.model;
+  if (!model) {
+    setEl('ota-latest-version', '–');
+    setEl('ota-update-status', '⚠️ Connect to the device first to detect the model.');
+    return;
+  }
+
   try {
-    const model = window.deviceMeta?.model;
-    if (!model) {
-      setEl('ota-latest-version', '–');
-      setEl('ota-update-status', '⚠️ Connect to the device first to detect the model.');
-      if (updateBtn) updateBtn.disabled = true;
-      return;
-    }
     const info = await S.ota.fetchLatestRelease(model);
     setEl('ota-latest-version', `v${info.version}`);
-    // Only enable update if device is behind latest
     const deviceVer = S.deviceFwVer?.replace(/^v/i, '') ?? '';
-    const latestVer  = info.version?.replace(/^v/i, '') ?? '';
-    const isBehind   = deviceVer !== '' && latestVer !== '' && deviceVer !== latestVer;
+    const latestVer = info.version?.replace(/^v/i, '')  ?? '';
+    const isBehind  = deviceVer !== '' && latestVer !== '' && deviceVer !== latestVer;
     if (updateBtn) updateBtn.disabled = !isBehind;
     if (!isBehind && deviceVer !== '') {
       setEl('ota-update-status', '✅ Device firmware is up to date.');
@@ -107,6 +101,17 @@ export async function loadOtaScreen() {
     setEl('ota-latest-version', 'Failed to check');
     setEl('ota-update-status', `Error: ${e.message}`);
   }
+}
+
+export async function loadOtaScreen() {
+  // Sync BLE row immediately
+  refreshBleRow();
+
+  // ── Populate static device info ─────────────────────────────────────────
+  refreshDeviceInfo();
+
+  // ── Firmware version check (runs immediately; shows prompt if not yet connected)
+  await checkFirmwareVersion();
 }
 
 // ── Flash firmware ────────────────────────────────────────────────────────────
