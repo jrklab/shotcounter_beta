@@ -11,3 +11,11 @@ read though web/ folder to understand the project context
     c. upload no video clips
 also add a comment field, and the comment there will be uploaded to Practice_Meta. When the use click the upload button, the json files as well as the video clips (if selected) will be uploaded to firebase.
 5. I don't want to save or uploade the entire video, and save the shot scenes to individual video clips based on the scene time, and pre_s and post_s, and only upload the clips to Firebase, per the selection. 
+
+
+## Task 2: separate shot scene trigger and shot classification, modify the current code structure
+1. A running shot scene detector go through every MPU samples and ToF samples, if the magnitude of acceleration is larger than certain threshold, or the ToF range and ToF signal rate is beyond certain threshold, a shot scene is triggered. the Time stamp of the MPU or TOF event will be recorded as T0, the MPU and TOF data within T0-pre_s and T0+post_s will be send to a classifer to determine whether it is miss or make or not a shot. The threshold are independent and configurable in the code. The scene window should not overlap with each other. pre_s = 0.5s, and post_s = 1.5s, and also configurable. 
+2. for there are two classifers available, Classic classifier is the current mode based on state machine and threshold. Learned classifier is a ML model, using 1D-cnn, defined in ml/ folder with the weights specified in ml/artifacts/model_cnn_primary.pt. For now, let's only focus on primary classifier. 
+3. On the practice setup page, below camera enable, add two classifier options, Classic  and Learned. By default it is Classic. 
+4. Based on the learned model, estimate the computation time for each shot scene. and estimate the detection latency. 
+

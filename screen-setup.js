@@ -63,6 +63,17 @@ export function wirePracticeSetup() {
 
   startBtn?.addEventListener('click', startPracticeSession);
 
+  // ── Classifier mode radio buttons ─────────────────────────────────────────
+  const radios = document.querySelectorAll('input[name="classifier-mode"]');
+  radios.forEach(r => {
+    r.checked = r.value === S.classifierMode;
+    r.addEventListener('change', () => {
+      S.classifierMode = r.value;
+      const noteEl = document.getElementById('classifier-latency-note');
+      if (noteEl) noteEl.style.display = r.value === 'learned' ? 'block' : 'none';
+    });
+  });
+
   function updateReadyGate() {
     if (startBtn) startBtn.disabled = !(S.isBleConnected && S.videoEnabled);
   }

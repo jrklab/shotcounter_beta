@@ -8,7 +8,7 @@ export const EVENT_PRE_MS        = 1500;   // ms before event for review window
 export const EVENT_POST_MS       = 2000;   // ms after event for review window
 
 // ── App revision — increment here when releasing a new web app version ────────
-export const APP_REVISION = 'v0.1.16';
+export const APP_REVISION = 'v0.1.17';
 
 // ── Beta detection — prefix session IDs when served from the beta app ─────────
 // Checks the full URL so "beta" is matched anywhere (hostname, path, etc.).
@@ -82,6 +82,11 @@ export const S = {
   // ── Audio ──────────────────────────────────────────────────────────────────
   audioCtx:    null,
   keepAliveEl: null,
+
+  // ── Classifier mode ────────────────────────────────────────────────────────
+  // 'classic'  = threshold state-machine (fast, ~0.5–2 s)
+  // 'learned'  = ONNX dual-branch CNN (~2.02 s fixed latency)
+  classifierMode: 'classic',
 
   // ── OTA ────────────────────────────────────────────────────────────────────
   ota: null,

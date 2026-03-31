@@ -311,4 +311,114 @@ class ShotClassifier {
   }
 }
 
-export { BaselineCalibrator, ThresholdConfig, ShotClassifier };
+// ---------------------------------------------------------------------------
+// ClassicClassifier
+// Runs the threshold state-machine over a pre-collected scene window
+// (produced by SceneDetector) using an already-calibrated BaselineCalibrator.
+// ---------------------------------------------------------------------------
+
+class ClassicClassifier {
+  /**
+   * @param {BaselineCalibrator} calibrator  Already-complete calibrator
+   * @param {ThresholdConfig}    [config]
+   */
+  constructor(calibrator, config) {
+    this.calibrator = calibrator;
+    this.config     = config ?? new ThresholdConfig();
+  }
+
+  /**
+   * Classify a scene window.
+   *
+   * @param {object} scene  from SceneDetector:
+   *   { trigger_ts, trigger_type,
+   *     imu: [{ts, mag, sample}],   // mag = calibrated accel magnitude (g)
+   *     tof: [{ts, distance, signalRate}] }
+   * @returns {{ classification: 'MAKE'|'MISS'|'NOT_SHOT',
+   *             confidence: number,
+   *             impact_time: number|null,
+   *             basket_time: number|null,
+   *             basket_type: 'SWISH'|'BANK'|null }}
+   */
+  classify(scene) {
+    const cfg = this.config;
+
+    // Merge IMU + TOF events, sorted by time
+    const events = [];
+    for (const s of scene.imu) events.push({ type: 'mpu', ts: s.ts, mag: s.mag });
+    for (const s of scene.tof) events.push({ type: 'tof', ts: s.ts,
+                                              distance: s.distance,
+                                              signalRate: s.signalRate });
+    events.sort((a, b) => a.ts - b.ts);
+
+    // State machine (same logic as ShotClassifier but operates on a fixed window)
+    let state      = 'IDLE';
+    let impactTime = null;
+    let basketStart = null;
+    let basketOrig  = null;
+
+    for (const ev of events) {
+      const basketNow = ev.type === 'tof' && _isBasket(ev, cfg);
+
+      if (state === 'IDLE') {
+        if (ev.type === 'mpu' && ev.mag > cfg.IMPACT_ACCEL_THRESHOLD) {
+          state = 'IMPACT'; impactTime = ev.ts;
+        } else if (basketNow) {
+          state = 'BASKET_PENDING'; basketStart = ev.ts; basketOrig = 'SWISH';
+        }
+
+      } else if (state === 'IMPACT') {
+        if (ev.ts - impactTime > cfg.MAX_TIME_AFTER_IMPACT) {
+          return _result('MISS', 0.85, impactTime, null, null);
+        }
+        if (basketNow) {
+          state = 'BASKET_PENDING'; basketStart = ev.ts; basketOrig = 'BANK';
+        }
+
+      } else if (state === 'BASKET_PENDING') {
+        if (ev.type === 'tof') {
+          if (basketNow) {
+            state = 'BASKET_DETECTED';
+          } else {
+            // single-sample noise
+            if (basketOrig === 'BANK') { state = 'IMPACT'; }
+            else { state = 'IDLE'; impactTime = null; }
+            basketOrig = null;
+          }
+        }
+
+      } else if (state === 'BASKET_DETECTED') {
+        if (ev.type === 'tof' && !basketNow) {
+          // TOF cleared → ball has passed through
+          return _result('MAKE',
+            basketOrig === 'BANK' ? 0.95 : 0.85,
+            impactTime, basketStart, basketOrig);
+        }
+      }
+    }
+
+    // Window ended while still in a terminal state
+    if (state === 'BASKET_DETECTED') {
+      // Ball still over sensor at window edge — still a make
+      return _result('MAKE',
+        basketOrig === 'BANK' ? 0.90 : 0.80,
+        impactTime, basketStart, basketOrig);
+    }
+    if (state === 'IMPACT' || (state === 'BASKET_PENDING' && basketOrig === 'BANK')) {
+      return _result('MISS', 0.85, impactTime, null, null);
+    }
+    return _result('NOT_SHOT', 0.60, null, null, null);
+  }
+}
+
+function _isBasket(ev, cfg) {
+  return ev.distance < cfg.TOF_DISTANCE_THRESHOLD_HIGH &&
+         ev.distance > cfg.TOF_DISTANCE_THRESHOLD_LOW  &&
+         ev.signalRate > cfg.TOF_SIGNAL_RATE_THRESHOLD;
+}
+
+function _result(classification, confidence, impact_time, basket_time, basket_type) {
+  return { classification, confidence, impact_time, basket_time, basket_type };
+}
+
+export { BaselineCalibrator, ThresholdConfig, ShotClassifier, ClassicClassifier };

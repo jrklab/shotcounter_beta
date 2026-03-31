@@ -2,7 +2,10 @@
 
 import { BLEReceiver }                from './ble.js';
 import { PacketParser }               from './parser.js';
-import { ShotClassifier }             from './classifier.js';
+import { BaselineCalibrator, ThresholdConfig,
+         ClassicClassifier }          from './classifier.js';
+import { SceneDetector }              from './detector.js';
+import { LearnedClassifier }          from './cnn-classifier.js';
 import { storeSessionVideo }          from './video-store.js';
 import { S, VIDEO_TIMESLICE_MS, VIDEO_BITRATE,
          SENSOR_WINDOW_SLOTS, IS_BETA }  from './state.js';
@@ -10,9 +13,14 @@ import { showScreen, setEl, showToast, speak, initAudio } from './utils.js';
 import { showReviewScreen }           from './screen-review.js';
 
 // ── Module-level instances ────────────────────────────────────────────────────
-// parser and classifier are reset on each session start
-let parser     = new PacketParser();
-let classifier = new ShotClassifier();
+let parser      = new PacketParser();
+let calibrator  = new BaselineCalibrator();
+let detector    = new SceneDetector(calibrator);
+let classicCls  = new ClassicClassifier(calibrator);
+let learnedCls  = null;   // LearnedClassifier — created lazily on first use
+
+// Kept current in onBlePacket so handleScene can reference it
+let latestDeviceTs_ms = 0;
 
 // BLE receiver — callbacks defined below so they reference the latest parser/classifier
 export const ble = new BLEReceiver(onBlePacket, onBleStatus);
@@ -43,7 +51,16 @@ export function startPracticeSession() {
   S.videoSessionBlob = null;
   if (S.videoSessionUrl) { URL.revokeObjectURL(S.videoSessionUrl); S.videoSessionUrl = null; }
 
-  classifier = new ShotClassifier();
+  calibrator = new BaselineCalibrator();
+  classicCls = new ClassicClassifier(calibrator);
+  detector   = new SceneDetector(calibrator);
+  detector.onScene = handleScene;
+  latestDeviceTs_ms = 0;
+  if (S.classifierMode === 'learned') {
+    if (!learnedCls) learnedCls = new LearnedClassifier(calibrator);
+    else learnedCls._cal = calibrator;   // update after session calibrator refresh
+    learnedCls.load();   // pre-warm ONNX model
+  }
   parser.reset();
 
   showScreen('practice-active');
@@ -114,7 +131,16 @@ export function restartPracticeSession() {
   S.videoSessionBlob = null;
   if (S.videoSessionUrl) { URL.revokeObjectURL(S.videoSessionUrl); S.videoSessionUrl = null; }
 
-  classifier = new ShotClassifier();
+  calibrator = new BaselineCalibrator();
+  classicCls = new ClassicClassifier(calibrator);
+  detector   = new SceneDetector(calibrator);
+  detector.onScene = handleScene;
+  latestDeviceTs_ms = 0;
+  if (S.classifierMode === 'learned') {
+    if (!learnedCls) learnedCls = new LearnedClassifier(calibrator);
+    else learnedCls._cal = calibrator;   // update after session calibrator refresh
+    learnedCls.load();
+  }
   parser.reset();
 
   if (S.mediaRecorder && S.mediaRecorder.state !== 'inactive') {
@@ -237,23 +263,64 @@ function onBlePacket(dataView) {
 
   if (S.activeScreen !== 'practice-active') return;
 
-  const latestDeviceTs_ms  = batch[batch.length - 1].mpu_ts;
+  latestDeviceTs_ms = batch[batch.length - 1].mpu_ts;
   S.allSensorData.push(...batch);
 
-  const cal     = classifier.calibrator;
-  const wasDone = cal.isComplete;
-  const newShots = classifier.processBatch(batch);
-
-  if (!wasDone) {
-    if (cal.isComplete) {
-      showCalibrationBar(false);
-      setActiveEvent('baseline ready — detecting shots 🏀', '#2ecc71');
-    } else {
-      updateCalBar(cal.progress);
+  for (const s of batch) {
+    if (!calibrator.isComplete) {
+      const done = calibrator.addSample(
+        s.accel, s.gyro, s.distance, s.signal_rate, s.mpu_ts / 1000.0);
+      updateCalBar(calibrator.progress);
+      if (done) {
+        showCalibrationBar(false);
+        setActiveEvent('baseline ready — detecting shots 🏀', '#2ecc71');
+      }
     }
+    // detector.push() is a no-op until calibration is complete (guarded internally)
+    detector.push(s);
+  }
+}
+
+// ── Scene handler (fired by SceneDetector.onScene) ───────────────────────────
+async function handleScene(scene) {
+  if (S.activeScreen !== 'practice-active') return;
+
+  const hostNow = performance.now();
+
+  // Choose classifier
+  let result;
+  const useLearn = S.classifierMode === 'learned' && learnedCls?.isReady;
+  if (useLearn) {
+    result = await learnedCls.classify(scene);
+  } else {
+    result = classicCls.classify(scene);
+  }
+  console.log(`[classifier:${useLearn ? 'cnn' : 'classic'}]`, result.classification,
+              `(${(result.confidence * 100).toFixed(0)}%)`);
+
+  if (result.classification === 'NOT_SHOT') {
+    // Add to session events for user review; do not count in totals
+    const eventTs = scene.trigger_ts;
+    const deviceLag_ms = Math.max(0, latestDeviceTs_ms - eventTs * 1000);
+    S.sessionEvents.push({
+      shot:            result,
+      ai_top:          'Not-a-shot',
+      ai_subtype:      null,
+      user_top:        'Not-a-shot',
+      user_subtype:    null,
+      device_event_ts: eventTs,
+      host_event_ts_s: (hostNow - deviceLag_ms) / 1000,
+      video_clip_ts:   (hostNow - S.recordingStartMs - deviceLag_ms) / 1000,
+      event_type:      'nas',
+      timestamp:       Date.now(),
+      host_ts:         hostNow,
+      hostEventTs:     hostNow - S.recordingStartMs - deviceLag_ms,
+      comment:         '',
+    });
+    return;
   }
 
-  for (const shot of newShots) onShotDetected(shot, hostNow, latestDeviceTs_ms);
+  onShotDetected(result, hostNow, latestDeviceTs_ms);
 }
 
 function onShotDetected(shot, hostNow = performance.now(), latestDeviceTs_ms = null) {
