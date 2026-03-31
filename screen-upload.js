@@ -8,25 +8,57 @@ import { showScreen, setEl }                        from './utils.js';
 import { Timestamp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 
 // ── Extract a single shot clip from recorded video chunks ────────────────────
+// Re-records from the full session blob using captureStream() so that:
+//   • The clip always starts on a keyframe (browser seek guarantees this).
+//   • Timestamps in the output start from 0, not the original recording offset.
 // Uses a 1 s pre-window + 2 s post-window around video_clip_ts.
 const CLIP_PRE_MS  = 1000;
 const CLIP_POST_MS = 2000;
 
-function extractShotClip(ev) {
-  if (!S.allVideoChunks.length || ev.video_clip_ts == null) return null;
-  const evMs       = ev.video_clip_ts * 1000;   // seconds → ms from recording start
-  const clipStart  = evMs - CLIP_PRE_MS;
-  const clipEnd    = evMs + CLIP_POST_MS;
-  // Always include chunk[0] so the WebM header / init segment is present
-  const header     = S.allVideoChunks[0];
-  const body       = S.allVideoChunks.filter(
-    c => c !== header && c.startMs >= clipStart && c.startMs < clipEnd
-  );
-  if (!body.length) return null;
-  return new Blob(
-    [header.data, ...body.map(c => c.data)],
-    { type: S.videoMimeType || 'video/webm' },
-  );
+async function extractShotClip(ev, fullBlob) {
+  if (!fullBlob || ev.video_clip_ts == null) return null;
+
+  const clipStartSec = Math.max(0, ev.video_clip_ts - CLIP_PRE_MS / 1000);
+  const clipDurMs    = CLIP_PRE_MS + CLIP_POST_MS;
+  const mimeType     = S.videoMimeType || 'video/webm';
+
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(fullBlob);
+    const vid = document.createElement('video');
+    vid.src              = url;
+    vid.muted            = true;
+    vid.style.cssText    = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px';
+    document.body.appendChild(vid);
+
+    const cleanup = () => { URL.revokeObjectURL(url); vid.remove(); };
+    vid.onerror = () => { cleanup(); resolve(null); };
+
+    vid.addEventListener('seeked', () => {
+      const captureFn = vid.captureStream ?? vid.mozCaptureStream;
+      if (!captureFn) { cleanup(); resolve(null); return; }
+
+      const stream   = captureFn.call(vid);
+      const recorder = new MediaRecorder(stream, { mimeType });
+      const chunks   = [];
+
+      recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+      recorder.onstop = () => {
+        cleanup();
+        resolve(chunks.length ? new Blob(chunks, { type: mimeType }) : null);
+      };
+
+      recorder.start(200);
+      vid.play().then(() => {
+        setTimeout(() => { vid.pause(); recorder.stop(); }, clipDurMs + 300);
+      }).catch(() => { cleanup(); resolve(null); });
+    }, { once: true });
+
+    vid.addEventListener('loadedmetadata', () => {
+      vid.currentTime = clipStartSec;
+    }, { once: true });
+
+    vid.load();
+  });
 }
 
 // ── Upload orchestrator ──────────────────────────────────────────────────────────────
@@ -90,12 +122,19 @@ export async function startUpload() {
   doneSteps++; updateBar();
 
   // ── 3. Upload per-shot video clips ────────────────────────────────────────
+  // Assemble full session blob (needed for seek-based clip extraction)
+  const fullVideoBlob = eventsForClip.length
+    ? (S.videoSessionBlob ?? (S.allVideoChunks.length
+        ? new Blob(S.allVideoChunks.map(c => c.data), { type: S.videoMimeType || 'video/webm' })
+        : null))
+    : null;
+
   for (let i = 0; i < eventsForClip.length; i++) {
     const ev        = eventsForClip[i];
     const globalIdx = S.sessionEvents.indexOf(ev);
     try {
-      setStatus(`Uploading clip ${i + 1} / ${eventsForClip.length}…`);
-      const blob = extractShotClip(ev);
+      setStatus(`Extracting & uploading clip ${i + 1} / ${eventsForClip.length}…`);
+      const blob = await extractShotClip(ev, fullVideoBlob);
       if (blob) {
         const url = await uploadClip(uid, S.sessionId, globalIdx, blob, S.videoMimeType);
         clipUrls.set(globalIdx, url);

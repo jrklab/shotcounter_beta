@@ -65,7 +65,8 @@ export function wireOtaScreen() {
 
 // ── Firmware version check ────────────────────────────────────────────────────
 async function checkFirmwareVersion() {
-  setEl('ota-device-version', S.deviceFwVer || '–');
+  const fwVer    = window.deviceMeta?.fwRevision || S.deviceFwVer || '';
+  setEl('ota-device-version', fwVer || '–');
   setEl('ota-latest-version', 'Checking…');
   setEl('ota-update-status', '');
   const updateBtn = document.getElementById('ota-update-btn');
@@ -90,7 +91,7 @@ async function checkFirmwareVersion() {
   try {
     const info = await S.ota.fetchLatestRelease(model);
     setEl('ota-latest-version', `v${info.version}`);
-    const deviceVer = S.deviceFwVer?.replace(/^v/i, '') ?? '';
+    const deviceVer = fwVer.replace(/^v/i, '');
     const latestVer = info.version?.replace(/^v/i, '')  ?? '';
     const isBehind  = deviceVer !== '' && latestVer !== '' && deviceVer !== latestVer;
     if (updateBtn) updateBtn.disabled = !isBehind;
