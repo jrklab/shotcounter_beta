@@ -3,7 +3,7 @@
 import { BLEReceiver }                from './ble.js';
 import { PacketParser }               from './parser.js';
 import { BaselineCalibrator, ThresholdConfig,
-         ClassicClassifier }          from './classifier.js';
+         ClassicClassifier }          from './rule-classifier.js';
 import { SceneDetector }              from './detector.js';
 import { LearnedClassifier }          from './cnn-classifier.js';
 import { storeSessionVideo }          from './video-store.js';

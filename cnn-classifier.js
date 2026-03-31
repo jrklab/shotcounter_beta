@@ -3,12 +3,16 @@
 /**
  * cnn-classifier.js — Learned shot classifier using ONNX Runtime Web.
  *
- * Model: dual-branch 1D-CNN (primary), ~8.7 k params.
+ * Model: dual-branch 1D-CNN (primary), ~9.5 k params.
  *   Inputs:
- *     x_imu  Float32 (1, 1, 800)   — accel_mag resampled @ 400 Hz, normalised
- *     x_tof  Float32 (1, 2, 80)    — [tof_range_mm, tof_sr] resampled @ 40 Hz, normalised
+ *     x_imu  Float32 (1, C_IMU, T_IMU) — IMU channels from EXP_FEATURES, resampled @ 200 Hz, normalised
+ *     x_tof  Float32 (1, C_TOF, T_TOF) — TOF channels from EXP_FEATURES, resampled @ 40 Hz, normalised
  *   Output:
- *     logits Float32 (1, 3)         — [Not-a-shot, Miss, Make]
+ *     logits Float32 (1, 3)             — [Not-a-shot, Miss, Make]
+ *
+ * Active features are driven by EXP_FEATURES in config.js (must match ml/dataset_config.py).
+ * T_IMU, T_TOF, C_IMU, C_TOF are read from normalizer.json._meta at load time
+ * so they stay in sync with the exported model automatically.
  *
  * Files required in web/model/:
  *   primary.onnx      — exported from ml/artifacts/exp1/model_cnn_primary.pt
@@ -21,22 +25,21 @@
  */
 
 import * as ort from 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/esm/ort.min.js';
+import { PRE_S, POST_S, IMU_HZ, TOF_HZ, TOF_OOR_FILL_MM, EXP_FEATURES } from './config.js';
 
-// ── Window geometry (must match training) ────────────────────────────────────
-const PRE_S   = 0.5;
-const POST_S  = 1.5;
-const IMU_HZ  = 400;   // resampled target rate
-const TOF_HZ  = 40;
-const T_IMU   = Math.round((PRE_S + POST_S) * IMU_HZ);   // 800
-const T_TOF   = Math.round((PRE_S + POST_S) * TOF_HZ);   //  80
-
-// ── IMU channel layout (must match prepare_dataset_firebase.py ALL_IMU_FEATURES) ─
-// ch 0-2 : accel_xyz (ax, ay, az) — baseline-subtracted (g)
-// ch 3   : accel_mag = √(ax²+ay²+az²) after baseline (g)
-// ch 4-6 : gyro_xyz  (gx, gy, gz) — raw °/s (no baseline subtraction in training)
-// ch 7   : gyro_mag  = √(gx²+gy²+gz²) °/s
-const C_IMU   = 8;
-const C_TOF   = 2;
+// ── Feature ordering (must match ALL_IMU/TOF_FEATURES in prepare_dataset_firebase.py) ─
+// Channels are appended in this fixed order; EXP_FEATURES selects which groups to include.
+// accel_xyz → [ax, ay, az] (baseline-subtracted, g)
+// accel_mag → [√(ax²+ay²+az²)] (g)
+// gyro_xyz  → [gx, gy, gz] (raw, °/s)
+// gyro_mag  → [√(gx²+gy²+gz²)] (°/s)
+// tof_range → [distance mm]
+// tof_sr    → [signal rate]
+//
+// T_IMU, T_TOF, C_IMU, C_TOF are read from normalizer.json _meta after load()
+// — they are the authoritative values exported by ml/export_onnx.py.
+const ALL_IMU_FEATURES = ['accel_xyz', 'accel_mag', 'gyro_xyz', 'gyro_mag'];
+const ALL_TOF_FEATURES = ['tof_range', 'tof_sr'];
 
 // Label indices (must match LABEL_MAP in train_cnn.py)
 const LABEL_NAMES = ['Not-a-shot', 'Miss', 'Make'];
@@ -47,7 +50,7 @@ const NORMALIZER_URL = './model/normalizer.json';
 
 export class LearnedClassifier {
   /**
-   * @param {import('./classifier.js').BaselineCalibrator} calibrator
+   * @param {import('./rule-classifier.js').BaselineCalibrator} calibrator
    *   Shared session-level calibrator — used to baseline-subtract accel channels.
    */
   constructor(calibrator) {
@@ -68,14 +71,38 @@ export class LearnedClassifier {
 
   async _doLoad() {
     try {
+      // Tell ORT where to find WASM binaries (same CDN, same version).
+      // numThreads=1 uses the non-threaded build — no SharedArrayBuffer required.
+      ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/';
+      ort.env.wasm.numThreads = 1;
+
       const [session, normJson] = await Promise.all([
         ort.InferenceSession.create(MODEL_URL, { executionProviders: ['wasm'] }),
         fetch(NORMALIZER_URL).then(r => r.json()),
       ]);
       this._session    = session;
       this._normalizer = normJson;
-      this.isReady     = true;
-      console.log('[LearnedClassifier] model loaded:', MODEL_URL);
+
+      // Geometry from the exported normalizer — single source of truth
+      const meta   = normJson._meta;
+      this._T_IMU  = meta.T_IMU;    // e.g. 400
+      this._T_TOF  = meta.T_TOF;    // e.g.  80
+      this._C_IMU  = meta.c_imu;   // e.g.   8
+      this._C_TOF  = meta.c_tof;   // e.g.   2
+
+      // Sanity-check against runtime config.js constants
+      const expectedT_IMU = Math.round((PRE_S + POST_S) * IMU_HZ);
+      const expectedT_TOF = Math.round((PRE_S + POST_S) * TOF_HZ);
+      if (this._T_IMU !== expectedT_IMU || this._T_TOF !== expectedT_TOF) {
+        console.warn(
+          `[LearnedClassifier] normalizer.json T_IMU/T_TOF (${this._T_IMU}/${this._T_TOF}) ` +
+          `does not match config.js (${expectedT_IMU}/${expectedT_TOF}). ` +
+          'Using values from normalizer.json.',
+        );
+      }
+
+      this.isReady = true;
+      console.log(`[LearnedClassifier] model loaded: T_IMU=${this._T_IMU} T_TOF=${this._T_TOF} C_IMU=${this._C_IMU} C_TOF=${this._C_TOF}`);
     } catch (e) {
       this.loadError = e.message;
       console.error('[LearnedClassifier] load failed:', e);
@@ -97,40 +124,64 @@ export class LearnedClassifier {
       const winLo  = t0 - PRE_S;
       const winHi  = t0 + POST_S;
 
-      // ── Extract 8 IMU channels + 2 TOF channels ─────────────────────────
-      // Channel order matches prepare_dataset_firebase.py ALL_IMU_FEATURES:
-      //   [ax, ay, az] (baseline-subtracted), accel_mag, [gx, gy, gz], gyro_mag
-      const cal    = this._cal;
-      const imuTs  = scene.imu.map(s => s.ts);
-      const ax = scene.imu.map(s => s.sample.accel[0] - (cal.accelX ?? 0));
-      const ay = scene.imu.map(s => s.sample.accel[1] - (cal.accelY ?? 0));
-      const az = scene.imu.map(s => s.sample.accel[2] - (cal.accelZ ?? 0));
-      const am = scene.imu.map(s => s.mag);   // already baseline-subtracted
-      const gx = scene.imu.map(s => s.sample.gyro[0]); // raw, no baseline
-      const gy = scene.imu.map(s => s.sample.gyro[1]);
-      const gz = scene.imu.map(s => s.sample.gyro[2]);
-      const gm = scene.imu.map(s => Math.sqrt(
-        s.sample.gyro[0] ** 2 + s.sample.gyro[1] ** 2 + s.sample.gyro[2] ** 2));
+      // ── Extract IMU + TOF channels driven by EXP_FEATURES ────────────────
+      // Channel order mirrors prepare_dataset_firebase.py: groups from
+      // ALL_IMU_FEATURES / ALL_TOF_FEATURES that appear in EXP_FEATURES.
+      const cal   = this._cal;
+      const imuTs = scene.imu.map(s => s.ts);
+      const tofTs = scene.tof.map(s => s.ts);
 
-      const tofTs  = scene.tof.map(s => s.ts);
-      const tofRng = scene.tof.map(s => s.distance);
-      const tofSr  = scene.tof.map(s => s.signalRate);
+      const imuFeat = ALL_IMU_FEATURES.filter(f => EXP_FEATURES.includes(f));
+      const tofFeat = ALL_TOF_FEATURES.filter(f => EXP_FEATURES.includes(f));
+
+      // Build raw IMU channel arrays in ALL_IMU_FEATURES order
+      const imuRawCh = [];
+      if (imuFeat.includes('accel_xyz')) {
+        imuRawCh.push(scene.imu.map(s => s.sample.accel[0] - (cal.accelX ?? 0)));
+        imuRawCh.push(scene.imu.map(s => s.sample.accel[1] - (cal.accelY ?? 0)));
+        imuRawCh.push(scene.imu.map(s => s.sample.accel[2] - (cal.accelZ ?? 0)));
+      }
+      if (imuFeat.includes('accel_mag')) {
+        imuRawCh.push(scene.imu.map(s => s.mag));  // baseline-subtracted mag
+      }
+      if (imuFeat.includes('gyro_xyz')) {
+        imuRawCh.push(scene.imu.map(s => s.sample.gyro[0]));
+        imuRawCh.push(scene.imu.map(s => s.sample.gyro[1]));
+        imuRawCh.push(scene.imu.map(s => s.sample.gyro[2]));
+      }
+      if (imuFeat.includes('gyro_mag')) {
+        imuRawCh.push(scene.imu.map(s => Math.sqrt(
+          s.sample.gyro[0] ** 2 + s.sample.gyro[1] ** 2 + s.sample.gyro[2] ** 2)));
+      }
 
       // ── Resample onto uniform grids ─────────────────────────────────────
-      const imuGrid  = linspace(winLo, winHi, T_IMU);
-      const tofGrid  = linspace(winLo, winHi, T_TOF);
+      const T_IMU = this._T_IMU;
+      const T_TOF = this._T_TOF;
+      const C_IMU = this._C_IMU;
+      const C_TOF = this._C_TOF;
 
-      const imuRaw = [ax, ay, az, am, gx, gy, gz, gm]
-        .map(ch => interp(imuGrid, imuTs, ch));
-      const tofRngR  = tofTs.length >= 2 ? interp(tofGrid, tofTs, tofRng)
-                                          : new Float32Array(T_TOF).fill(1000);
-      const tofSrR   = tofTs.length >= 2 ? interp(tofGrid, tofTs, tofSr)
-                                          : new Float32Array(T_TOF).fill(0);
+      const imuGrid = linspace(winLo, winHi, T_IMU);
+      const tofGrid = linspace(winLo, winHi, T_TOF);
+
+      const imuRaw = imuRawCh.map(ch => interp(imuGrid, imuTs, ch));
+
+      // Build TOF channel arrays in ALL_TOF_FEATURES order
+      const tofRaw = [];
+      if (tofFeat.includes('tof_range')) {
+        tofRaw.push(tofTs.length >= 2
+          ? interp(tofGrid, tofTs, scene.tof.map(s => s.distance))
+          : new Float32Array(T_TOF).fill(TOF_OOR_FILL_MM));
+      }
+      if (tofFeat.includes('tof_sr')) {
+        tofRaw.push(tofTs.length >= 2
+          ? interp(tofGrid, tofTs, scene.tof.map(s => s.signalRate))
+          : new Float32Array(T_TOF).fill(0));
+      }
 
       // ── Normalize → pack (C, T) buffers ──────────────────────────────────
       const norm = this._normalizer;
-      const xImu = normaliseNch(imuRaw,           norm.imu.mean, norm.imu.std);
-      const xTof = normaliseNch([tofRngR, tofSrR], norm.tof.mean, norm.tof.std);
+      const xImu = normaliseNch(imuRaw, norm.imu.mean, norm.imu.std);
+      const xTof = normaliseNch(tofRaw, norm.tof.mean, norm.tof.std);
 
       // ── Build ONNX tensors — shape (1, C, T) ─────────────────────────────
       const tensorImu = new ort.Tensor('float32', xImu, [1, C_IMU, T_IMU]);

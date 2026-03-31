@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>LearnedClassifier — Runtime Test</title>
+  <style>
+    body { font-family: monospace; padding: 1.5em; background: #111; color: #ddd; }
+    h2   { color: #fff; }
+    pre  { background: #1e1e1e; padding: 1em; border-radius: 6px; white-space: pre-wrap; }
+    .ok  { color: #4ec94e; }
+    .err { color: #f77; }
+    .dim { color: #888; }
+    button {
+      padding: .5em 1.2em;
+      font-size: 1em;
+      cursor: pointer;
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      margin: .5em .5em .5em 0;
+    }
+  </style>
+</head>
+<body>
+  <h2>LearnedClassifier — Runtime Test</h2>
+  <p class="dim">
+    Generates synthetic IMU + ToF scenes (using EXP_FEATURES from config.js),
+    loads the ONNX model and runs inference.  Open DevTools console for full log.
+  </p>
+  <button id="btnRun">Run test</button>
+  <button id="btnAll">Run all scenes (×10)</button>
+  <pre id="out">Click "Run test" to start…</pre>
+
+<script type="module">
+import { LearnedClassifier }             from './cnn-classifier.js';
+import { PRE_S, POST_S, IMU_HZ, TOF_HZ,
+         TOF_OOR_FILL_MM, EXP_FEATURES } from './config.js';
+
+const out = document.getElementById('out');
+
+function log(msg, cls = '') {
+  out.innerHTML += (cls ? `<span class="${cls}">` : '') + msg + (cls ? '</span>' : '') + '\n';
+  console.log(msg);
+}
+
+// ── Fake BaselineCalibrator ──────────────────────────────────────────────────
+const fakeCalibrator = {
+  isComplete: true,
+  accelX: 0, accelY: 0, accelZ: 0,
+};
+
+// ── Synthetic scene builder ──────────────────────────────────────────────────
+/**
+ * Build a fake scene with `nImu` IMU samples and `nTof` ToF samples
+ * over the window [0, PRE_S + POST_S].
+ *
+ * @param {'make'|'miss'|'idle'} type  Controls signal shape:
+ *   'make'  — large accel spike at trigger_ts + short ToF dip
+ *   'miss'  — moderate accel, ToF stays high
+ *   'idle'  — low accel, ToF steady
+ */
+function makeSyntheticScene(type = 'make') {
+  const T    = PRE_S + POST_S;          // 2.0 s total window
+  const t0   = PRE_S;                   // trigger at centre
+  const nImu = Math.round(T * IMU_HZ);  // 400
+  const nTof = Math.round(T * TOF_HZ);  // 80
+
+  const imu = [];
+  for (let i = 0; i < nImu; i++) {
+    const ts   = (i / IMU_HZ);          // 0 … T seconds
+    const dt   = ts - t0;
+
+    // Accel magnitude profile — gaussian bump at trigger
+    let spikeMag = 0;
+    if (type === 'make')  spikeMag = 2.0 * Math.exp(-dt * dt / 0.005);
+    if (type === 'miss')  spikeMag = 1.2 * Math.exp(-dt * dt / 0.008);
+    if (type === 'idle')  spikeMag = 0.05;
+
+    const noise = () => (Math.random() - 0.5) * 0.05;
+    const ax = spikeMag * 0.6 + noise();
+    const ay = spikeMag * 0.3 + noise();
+    const az = spikeMag * 0.1 + noise() + 1.0; // ~1g gravity on z
+
+    const mag = Math.sqrt(ax * ax + ay * ay + az * az);
+
+    imu.push({
+      ts,
+      mag,
+      sample: {
+        accel: [ax, ay, az],
+        gyro:  [noise() * 10, noise() * 10, noise() * 10],
+      },
+    });
+  }
+
+  const tof = [];
+  for (let j = 0; j < nTof; j++) {
+    const ts = (j / TOF_HZ);
+    const dt = ts - t0;
+
+    let dist;
+    if (type === 'make') {
+      // Ball passes over sensor — sharp dip to ~100 mm at trigger, else ~800 mm
+      dist = dt >= 0 && dt < 0.2
+        ? 100 + Math.random() * 30
+        : 800  + Math.random() * 50;
+    } else {
+      dist = TOF_OOR_FILL_MM * 0.8 + Math.random() * 100;
+    }
+
+    tof.push({ ts, distance: dist, signalRate: 1200 + Math.random() * 200 });
+  }
+
+  return {
+    trigger_ts:   t0,
+    trigger_type: 'imu',
+    imu,
+    tof,
+  };
+}
+
+// ── Classifier instance (shared across button clicks) ───────────────────────
+const cls = new LearnedClassifier(fakeCalibrator);
+
+async function ensureLoaded() {
+  if (!cls.isReady) {
+    log('Loading ONNX model and normalizer.json…', 'dim');
+    await cls.load();
+    if (!cls.isReady) {
+      log(`LOAD FAILED: ${cls.loadError}`, 'err');
+      return false;
+    }
+    log(`Model ready  C_IMU=${cls._C_IMU}  C_TOF=${cls._C_TOF}` +
+        `  T_IMU=${cls._T_IMU}  T_TOF=${cls._T_TOF}`, 'ok');
+    log(`EXP_FEATURES = ${JSON.stringify(EXP_FEATURES)}\n`, 'dim');
+  }
+  return true;
+}
+
+async function runOne(type) {
+  const scene  = makeSyntheticScene(type);
+  const t1     = performance.now();
+  const result = await cls.classify(scene);
+  const dt     = (performance.now() - t1).toFixed(1);
+  const line   = `[${type.padEnd(5)}] → ${result.classification.padEnd(9)}`
+               + `  conf=${(result.confidence * 100).toFixed(1)}%  (${dt} ms wall)`;
+  const cls2   = result.classification === 'NOT_SHOT' ? 'dim'
+               : result.classification === 'MAKE'     ? 'ok' : '';
+  log(line, cls2);
+  return result;
+}
+
+document.getElementById('btnRun').onclick = async () => {
+  out.textContent = '';
+  if (!await ensureLoaded()) return;
+  for (const t of ['make', 'miss', 'idle']) await runOne(t);
+  log('\nDone.', 'dim');
+};
+
+document.getElementById('btnAll').onclick = async () => {
+  out.textContent = '';
+  if (!await ensureLoaded()) return;
+  const types = ['make', 'miss', 'idle'];
+  for (let i = 0; i < 10; i++) {
+    const t = types[i % 3];
+    await runOne(t);
+  }
+  log('\nDone.', 'dim');
+};
+</script>
+</body>
+</html>

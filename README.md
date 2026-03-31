@@ -32,8 +32,19 @@ src/web/
 ├── index.html      Main page — UI, layout, event wiring
 ├── ble.js          Web Bluetooth connect / notify layer
 ├── parser.js       Binary packet parser (mirrors data_receiver.py)
-└── classifier.js   Shot classifier + baseline calibrator (mirrors shot_classifier.py)
+└── rule-classifier.js   Rule-based shot classifier + baseline calibrator (mirrors shot_classifier.py)
 ```
+
+## Local development
+
+Start the dev server from the workspace root:
+
+```bash
+python3 web/serve.py          # serves on http://localhost:8765
+```
+
+Open `http://localhost:8765/web/test-classifier.html` in Chrome to verify the
+ONNX model loads and runs inference correctly without a BLE device.
 
 ## Setting up GitHub Pages
 

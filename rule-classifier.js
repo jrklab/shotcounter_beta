@@ -1,6 +1,6 @@
 /**
- * classifier.js
- * Basketball shot classifier — JavaScript port of shot_classifier.py.
+ * rule-classifier.js
+ * Rule-based (threshold state-machine) basketball shot classifier — JavaScript port of shot_classifier.py.
  *
  * Matches the Python implementation exactly:
  *   - BaselineCalibrator: MAD-filtered per-axis baselines, 3-second window

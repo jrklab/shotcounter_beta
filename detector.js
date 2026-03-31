@@ -21,6 +21,8 @@
  * }
  */
 
+import { PRE_S, POST_S } from './config.js';
+
 const INVALID_TOF = new Set([0xFFFE, 65534, 0xFFFF, 65535, 0]);
 
 // ── Configurable thresholds ──────────────────────────────────────────────────
@@ -33,19 +35,19 @@ export class DetectorConfig {
     this.TOF_LOW_MM         = 200;   // mm — range below this is "ball in basket"
     this.TOF_SR_THRESHOLD   = 500;   // signal-rate units
 
-    // Scene window (must match ML training window)
-    this.PRE_S              = 0.5;   // seconds before trigger
-    this.POST_S             = 1.5;   // seconds after trigger
+    // Scene window — values from config.js (must match ML training)
+    this.PRE_S              = PRE_S;
+    this.POST_S             = POST_S;
 
     // After emitting a scene, ignore triggers for this long
-    this.BLACKOUT_S         = 2.0;
+    this.BLACKOUT_S         = 0.5;
   }
 }
 
 // ── Scene detector ───────────────────────────────────────────────────────────
 export class SceneDetector {
   /**
-   * @param {import('./classifier.js').BaselineCalibrator} calibrator
+   * @param {import('./rule-classifier.js').BaselineCalibrator} calibrator
    *   Shared session-level calibrator — detector will not trigger until complete.
    * @param {DetectorConfig} [config]
    */
