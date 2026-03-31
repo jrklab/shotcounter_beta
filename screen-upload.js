@@ -204,6 +204,7 @@ export async function startUpload() {
         durationSec:   durSec,
         comment:       S.sessionComment ?? '',
         location:      S.sessionLocation ?? null,
+        classifier:    S.classifierMode ?? 'classic',
       },
       createdAt:                 Timestamp.now(),
       sensor_data_url:           sensorDataUrl,

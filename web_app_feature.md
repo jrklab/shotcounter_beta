@@ -19,3 +19,6 @@ also add a comment field, and the comment there will be uploaded to Practice_Met
 3. On the practice setup page, below camera enable, add two classifier options, Classic  and Learned. By default it is Classic. 
 4. Based on the learned model, estimate the computation time for each shot scene. and estimate the detection latency. 
 
+## Task 3: 
+1. add a discard button between "go back" and "confirm" in shot review page, to discard certain shot scene during review, and move to review the next scene. The discarded scene doesn't need to be included in session or shot json. 
+2. add classifier type into session json on firestore, so that I know which classifier is used in this session

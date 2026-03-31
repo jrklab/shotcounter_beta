@@ -35,6 +35,19 @@ export function wireReviewScreen() {
   document.getElementById('review-back-btn')?.addEventListener('click', () => {
     if (S.reviewIndex > 0) { S.reviewIndex--; renderReviewCard(); }
   });
+
+  document.getElementById('review-discard-btn')?.addEventListener('click', () => {
+    // Remove this scene entirely — it will not appear in the session or shot JSON.
+    S.sessionEvents.splice(S.reviewIndex, 1);
+    if (S.sessionEvents.length === 0 || S.reviewIndex >= S.sessionEvents.length) {
+      // No more scenes to review — go straight to upload options.
+      showScreen('upload-options');
+      initUploadOptions();
+    } else {
+      // reviewIndex now points to the next scene (splice shifted it into place).
+      renderReviewCard();
+    }
+  });
 }
 
 // ── Render one review card ────────────────────────────────────────────────────
