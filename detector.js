@@ -27,7 +27,7 @@ const INVALID_TOF = new Set([0xFFFE, 65534, 0xFFFF, 65535, 0]);
 export class DetectorConfig {
   constructor() {
     // IMU trigger: residual accel magnitude above baseline (g)
-    this.ACCEL_TRIGGER_G    = 2.0;
+    this.ACCEL_TRIGGER_G    = 1;
 
     // ToF trigger: ball over sensor (low range + sufficient signal rate)
     this.TOF_LOW_MM         = 200;   // mm — range below this is "ball in basket"
@@ -88,8 +88,8 @@ export class SceneDetector {
       const cfg    = this._cfg;
       const imuHit = mag > cfg.ACCEL_TRIGGER_G;
       const tofHit = isValidTof &&
-                     sample.distance < cfg.TOF_LOW_MM &&
-                     sample.signal_rate > cfg.TOF_SR_THRESHOLD;
+                    sample.signal_rate > cfg.TOF_SR_THRESHOLD;
+    //                 sample.distance < cfg.TOF_LOW_MM &&
 
       if (imuHit || tofHit) {
         this._t0           = imuHit ? mpuTs : tofTs;
