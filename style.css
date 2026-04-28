@@ -192,6 +192,24 @@ html, body {
 .toggle-switch input:checked + .toggle-track { background: #1f618d; }
 .toggle-switch input:checked + .toggle-track::before { transform: translateX(20px); background: var(--make); }
 
+/* ── Classifier advanced params panel ──────────────────────────────────────── */
+.param-panel {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px 12px;
+}
+.param-grid {
+  display: grid; grid-template-columns: 1fr auto;
+  align-items: center; gap: 6px 10px;
+}
+.param-label { font-size: 0.78rem; color: var(--muted); }
+.param-input {
+  width: 80px; padding: 4px 6px; font-size: 0.82rem;
+  background: #1e2736; color: var(--text);
+  border: 1px solid var(--border); border-radius: 4px;
+  text-align: right;
+}
+.param-input:focus { outline: none; border-color: #1f618d; }
+
 /* ══ PRACTICE ACTIVE ══════════════════════════════════════════════ */
 #screen-practice-active { padding: 0; overflow: hidden; background: #000; }
 

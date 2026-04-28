@@ -8,7 +8,7 @@ export const EVENT_PRE_MS        = 1500;   // ms before event for review window
 export const EVENT_POST_MS       = 2000;   // ms after event for review window
 
 // ── App revision — increment here when releasing a new web app version ────────
-export const APP_REVISION = 'v0.1.19';
+export const APP_REVISION = 'v0.1.21';
 
 // ── Beta detection — prefix session IDs when served from the beta app ─────────
 // Checks the full URL so "beta" is matched anywhere (hostname, path, etc.).
@@ -87,6 +87,23 @@ export const S = {
   // 'classic'  = threshold state-machine (fast, ~0.5–2 s)
   // 'learned'  = ONNX dual-branch CNN (~2.02 s fixed latency)
   classifierMode: 'classic',
+
+  // ── Classifier hyperparameters (advanced mode) ─────────────────────────────
+  // Values here are passed to ThresholdConfig / DetectorConfig when a session starts.
+  // Reset to these defaults whenever the advanced toggle is switched off.
+  classicParams: {
+    IMPACT_ACCEL_THRESHOLD:      1,    // g above baseline
+    TOF_DISTANCE_THRESHOLD_HIGH: 360,  // mm
+    TOF_DISTANCE_THRESHOLD_LOW:  60,   // mm
+    TOF_SIGNAL_RATE_THRESHOLD:   500,
+  },
+  detectorParams: {
+    IMPACT_ACCEL_THRESHOLD:      1,    // g above baseline
+    TOF_DISTANCE_THRESHOLD_HIGH: 1300, // mm
+    TOF_DISTANCE_THRESHOLD_LOW:  0,    // mm
+    TOF_SIGNAL_RATE_THRESHOLD:   500,
+  },
+  advancedMode: false,
 
   // ── OTA ────────────────────────────────────────────────────────────────────
   ota: null,

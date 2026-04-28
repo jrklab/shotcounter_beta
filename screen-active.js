@@ -4,7 +4,7 @@ import { BLEReceiver }                from './ble.js';
 import { PacketParser }               from './parser.js';
 import { BaselineCalibrator, ThresholdConfig,
          ClassicClassifier }          from './rule-classifier.js';
-import { SceneDetector }              from './detector.js';
+import { SceneDetector, DetectorConfig } from './detector.js';
 import { LearnedClassifier }          from './cnn-classifier.js';
 import { storeSessionVideo }          from './video-store.js';
 import { S, VIDEO_TIMESLICE_MS, VIDEO_BITRATE,
@@ -24,6 +24,18 @@ let latestDeviceTs_ms = 0;
 
 // BLE receiver — callbacks defined below so they reference the latest parser/classifier
 export const ble = new BLEReceiver(onBlePacket, onBleStatus);
+
+// ── Build classifier / detector configs from S.*Params ───────────────────────
+function buildClassicConfig() {
+  const cfg = new ThresholdConfig();
+  Object.assign(cfg, S.classicParams);
+  return cfg;
+}
+function buildDetectorConfig() {
+  const cfg = new DetectorConfig();
+  Object.assign(cfg, S.detectorParams);
+  return cfg;
+}
 
 // ── Wire buttons ──────────────────────────────────────────────────────────────
 export function wirePracticeActive() {
@@ -52,8 +64,8 @@ export function startPracticeSession() {
   if (S.videoSessionUrl) { URL.revokeObjectURL(S.videoSessionUrl); S.videoSessionUrl = null; }
 
   calibrator = new BaselineCalibrator();
-  classicCls = new ClassicClassifier(calibrator);
-  detector   = new SceneDetector(calibrator);
+  classicCls = new ClassicClassifier(calibrator, buildClassicConfig());
+  detector   = new SceneDetector(calibrator, buildDetectorConfig());
   detector.onScene = handleScene;
   latestDeviceTs_ms = 0;
   if (S.classifierMode === 'learned') {
@@ -132,8 +144,8 @@ export function restartPracticeSession() {
   if (S.videoSessionUrl) { URL.revokeObjectURL(S.videoSessionUrl); S.videoSessionUrl = null; }
 
   calibrator = new BaselineCalibrator();
-  classicCls = new ClassicClassifier(calibrator);
-  detector   = new SceneDetector(calibrator);
+  classicCls = new ClassicClassifier(calibrator, buildClassicConfig());
+  detector   = new SceneDetector(calibrator, buildDetectorConfig());
   detector.onScene = handleScene;
   latestDeviceTs_ms = 0;
   if (S.classifierMode === 'learned') {

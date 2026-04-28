@@ -22,3 +22,23 @@ also add a comment field, and the comment there will be uploaded to Practice_Met
 ## Task 3: 
 1. add a discard button between "go back" and "confirm" in shot review page, to discard certain shot scene during review, and move to review the next scene. The discarded scene doesn't need to be included in session or shot json. 
 2. add classifier type into session json on firestore, so that I know which classifier is used in this session
+
+## Task 4: on the practice setup page, add an advanced feature to allow user to change the hyper parameters for both classifiers
+1. add a toggle button in classifier section, when it is toggled to advanced mode, it will allow user to change the hyper parameters. when it is toggled back to normal mode, it will reset the parameters to the default value
+2. for classic classifier, the parameters are 
+    this.IMPACT_ACCEL_THRESHOLD         = 1;     // g above baseline
+    this.TOF_DISTANCE_THRESHOLD_HIGH    = 360;   // mm
+    this.TOF_DISTANCE_THRESHOLD_LOW     = 60;    // mm
+    this.TOF_SIGNAL_RATE_THRESHOLD      = 500;
+3. for learned classifier, the parameters are for detectors
+    // IMU trigger: residual accel magnitude above baseline (g)
+    this.ACCEL_TRIGGER_G    = 1;
+    // ToF trigger: ball over sensor (between low and high range + sufficient signal rate)
+    this.TOF_LOW_MM         = 0;   // mm — range below this is "no basket"
+    this.TOF_HIGH_MM        = 1300;   // mm — range above this is "no ball"
+    this.TOF_SR_THRESHOLD   = 500;   // signal-rate units
+4. consolidate the parameters to the same name used by the rule_classifier, need to modify the related code.
+5. when the button is toggled from normal to advanced, these parameters will be reset to the default value.
+
+## Task 5: log the classifier parameters 
+1. log the classifier parameters defined in task 4 to Practice_Meta filed in the session json file in firebase.

@@ -71,14 +71,79 @@ export function wirePracticeSetup() {
       S.classifierMode = r.value;
       const noteEl = document.getElementById('classifier-latency-note');
       if (noteEl) noteEl.style.display = r.value === 'learned' ? 'block' : 'none';
+      _syncParamPanels();
     });
   });
+
+  // ── Advanced mode toggle ───────────────────────────────────────────────────
+  const advToggle = document.getElementById('classifier-advanced-toggle');
+  if (advToggle) {
+    advToggle.checked = S.advancedMode;
+    advToggle.addEventListener('change', () => {
+      S.advancedMode = advToggle.checked;
+      if (!S.advancedMode) {
+        // Reset params to defaults
+        Object.assign(S.classicParams,  { IMPACT_ACCEL_THRESHOLD: 1, TOF_DISTANCE_THRESHOLD_HIGH: 360,  TOF_DISTANCE_THRESHOLD_LOW: 60, TOF_SIGNAL_RATE_THRESHOLD: 500 });
+        Object.assign(S.detectorParams, { IMPACT_ACCEL_THRESHOLD: 1, TOF_DISTANCE_THRESHOLD_HIGH: 1300, TOF_DISTANCE_THRESHOLD_LOW: 0,  TOF_SIGNAL_RATE_THRESHOLD: 500 });
+      }
+      _syncParamPanels();
+    });
+  }
+
+  // ── Param inputs ───────────────────────────────────────────────────────────
+  function _bindParam(id, obj, key) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('change', () => { obj[key] = parseFloat(el.value) || 0; });
+  }
+  _bindParam('p-classic-accel',    S.classicParams,  'IMPACT_ACCEL_THRESHOLD');
+  _bindParam('p-classic-tof-high', S.classicParams,  'TOF_DISTANCE_THRESHOLD_HIGH');
+  _bindParam('p-classic-tof-low',  S.classicParams,  'TOF_DISTANCE_THRESHOLD_LOW');
+  _bindParam('p-classic-sr',       S.classicParams,  'TOF_SIGNAL_RATE_THRESHOLD');
+  _bindParam('p-det-accel',        S.detectorParams, 'IMPACT_ACCEL_THRESHOLD');
+  _bindParam('p-det-tof-high',     S.detectorParams, 'TOF_DISTANCE_THRESHOLD_HIGH');
+  _bindParam('p-det-tof-low',      S.detectorParams, 'TOF_DISTANCE_THRESHOLD_LOW');
+  _bindParam('p-det-sr',           S.detectorParams, 'TOF_SIGNAL_RATE_THRESHOLD');
+
+  _syncParamPanels();
 
   function updateReadyGate() {
     if (startBtn) startBtn.disabled = !(S.isBleConnected && S.videoEnabled);
   }
   // Exposed so BLE status changes (onBleStatus) can trigger a gate re-check
   window._updatePracticeReadyGate = updateReadyGate;
+}
+
+// ── Sync advanced panel visibility and populate inputs from state ─────────────
+function _syncParamPanels() {
+  const panel     = document.getElementById('classifier-advanced-panel');
+  const classicEl = document.getElementById('classic-params-panel');
+  const detEl     = document.getElementById('detector-params-panel');
+  if (!panel) return;
+
+  panel.style.display = S.advancedMode ? 'block' : 'none';
+  if (!S.advancedMode) return;
+
+  const isLearn = S.classifierMode === 'learned';
+  if (classicEl) classicEl.style.display = isLearn ? 'none' : 'block';
+  if (detEl)     detEl.style.display     = isLearn ? 'block' : 'none';
+
+  // Populate inputs with current param values
+  const cp = S.classicParams;
+  const dp = S.detectorParams;
+  _setInput('p-classic-accel',    cp.IMPACT_ACCEL_THRESHOLD);
+  _setInput('p-classic-tof-high', cp.TOF_DISTANCE_THRESHOLD_HIGH);
+  _setInput('p-classic-tof-low',  cp.TOF_DISTANCE_THRESHOLD_LOW);
+  _setInput('p-classic-sr',       cp.TOF_SIGNAL_RATE_THRESHOLD);
+  _setInput('p-det-accel',        dp.IMPACT_ACCEL_THRESHOLD);
+  _setInput('p-det-tof-high',     dp.TOF_DISTANCE_THRESHOLD_HIGH);
+  _setInput('p-det-tof-low',      dp.TOF_DISTANCE_THRESHOLD_LOW);
+  _setInput('p-det-sr',           dp.TOF_SIGNAL_RATE_THRESHOLD);
+}
+
+function _setInput(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.value = val;
 }
 
 export function resetPracticeSetup() {
