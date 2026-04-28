@@ -210,6 +210,61 @@ html, body {
 }
 .param-input:focus { outline: none; border-color: #1f618d; }
 
+/* ══ PARAM CALIBRATION OVERLAY ═══════════════════════════════════ */
+#calib-overlay {
+  position: fixed; inset: 0; z-index: 300;
+  background: rgba(0,0,0,0.88);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.calib-modal {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 24px 20px;
+  width: min(100%, 340px); display: flex; flex-direction: column; gap: 14px;
+}
+.calib-title { font-size: 1rem; font-weight: 700; text-align: center; }
+.calib-note  { font-size: 0.78rem; color: var(--muted); text-align: center; }
+.calib-warn  { font-size: 0.78rem; color: var(--orange); text-align: center; line-height: 1.4; }
+.calib-big   { font-size: 2rem; font-weight: 900; color: var(--score); text-align: center; }
+
+.calib-bar-wrap {
+  width: 100%; height: 6px; background: #1e2736;
+  border-radius: 3px; overflow: hidden;
+}
+.calib-bar {
+  height: 100%; width: 0%; background: var(--orange);
+  border-radius: 3px; transition: width 0.2s;
+}
+
+.calib-results-header {
+  display: grid; grid-template-columns: 1fr auto auto auto;
+  gap: 4px 10px; font-size: 0.72rem; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.calib-col-hdr { text-align: right; }
+.calib-results-grid {
+  display: grid; grid-template-columns: 1fr auto auto auto;
+  align-items: center; gap: 6px 10px;
+}
+.calib-current   { font-size: 0.82rem; color: var(--muted); text-align: right; }
+.calib-arrow     { font-size: 0.82rem; color: var(--muted); }
+.calib-suggested { font-size: 0.82rem; color: var(--make); font-weight: 700; text-align: right; }
+
+.calib-raw-label {
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--muted); margin: 12px 0 4px;
+}
+.calib-raw-stats {
+  display: grid; grid-template-columns: 1fr auto;
+  align-items: center; gap: 4px 10px;
+}
+.calib-stat-label { font-size: 0.82rem; color: var(--fg); }
+.calib-stat-value { font-size: 0.82rem; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+
+.calib-footer {
+  display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px;
+}
+
 /* ══ PRACTICE ACTIVE ══════════════════════════════════════════════ */
 #screen-practice-active { padding: 0; overflow: hidden; background: #000; }
 

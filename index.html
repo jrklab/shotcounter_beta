@@ -134,16 +134,20 @@
           <!-- Advanced params panel (hidden until toggle is ON) -->
           <div id="classifier-advanced-panel" style="display:none;margin-top:10px">
 
+            <button id="calib-start-btn" class="btn btn-dark btn-sm" style="width:100%;margin-bottom:8px">
+              📐 Calibrate Parameters
+            </button>
+
             <!-- Classic params -->
             <div id="classic-params-panel" class="param-panel">
               <div class="param-grid">
                 <label class="param-label" for="p-classic-accel">Accel threshold (g)</label>
                 <input class="param-input" type="number" id="p-classic-accel" min="0.1" max="10" step="0.1">
 
-                <label class="param-label" for="p-classic-tof-high">ToF high (mm)</label>
+                <label class="param-label" for="p-classic-tof-high">Range high (mm)</label>
                 <input class="param-input" type="number" id="p-classic-tof-high" min="1" max="2000" step="1">
 
-                <label class="param-label" for="p-classic-tof-low">ToF low (mm)</label>
+                <label class="param-label" for="p-classic-tof-low">Range low (mm)</label>
                 <input class="param-input" type="number" id="p-classic-tof-low" min="0" max="1000" step="1">
 
                 <label class="param-label" for="p-classic-sr">Signal rate</label>
@@ -434,6 +438,48 @@
 
   <!-- Main app (ESM — imports ble.js, parser.js, rule-classifier.js, auth.js, db.js, ota-ble.js) -->
   <script type="module" src="./app.js"></script>
+
+  <!-- ── Parameter Calibration Overlay ────────────────────────────────────── -->
+  <div id="calib-overlay" style="display:none">
+    <div class="calib-modal">
+
+      <!-- Phase: baseline -->
+      <div id="calib-phase-baseline">
+        <div class="calib-title">📐 Capturing baseline…</div>
+        <div class="calib-note">Keep the sensor still for 3 seconds</div>
+        <div class="calib-bar-wrap"><div id="calib-bl-bar" class="calib-bar"></div></div>
+      </div>
+
+      <!-- Phase: shooting -->
+      <div id="calib-phase-shooting" style="display:none">
+        <div class="calib-title">🏀 Shoot freely</div>
+        <div class="calib-note">Shoot from various distances and angles, then press Stop</div>
+        <div class="calib-big">Valid ToF readings: <span id="calib-tof-count">0</span></div>
+        <button id="calib-stop-btn" class="btn btn-green btn-sm" style="display:none;margin-top:14px">
+          Stop &amp; Calculate
+        </button>
+      </div>
+
+      <!-- Phase: results -->
+      <div id="calib-phase-results" style="display:none">
+        <div class="calib-title">✅ Suggested Parameters</div>
+        <div id="calib-tof-warn" class="calib-warn" style="display:none"></div>
+        <div class="calib-results-header">
+          <span></span><span class="calib-col-hdr">Current</span>
+          <span></span><span class="calib-col-hdr">Suggested</span>
+        </div>
+        <div id="calib-results-grid" class="calib-results-grid"></div>
+        <div class="calib-raw-label">Observed statistics</div>
+        <div id="calib-raw-stats" class="calib-raw-stats"></div>
+        <div id="calib-stats-note" class="calib-note" style="margin-top:8px"></div>
+      </div>
+
+      <div class="calib-footer">
+        <button id="calib-apply-btn" class="btn btn-green btn-sm" style="display:none">Apply</button>
+        <button id="calib-cancel-btn" class="btn btn-dark btn-sm">Cancel</button>
+      </div>
+    </div>
+  </div>
 
 </body>
 </html>

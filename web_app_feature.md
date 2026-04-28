@@ -42,3 +42,20 @@ also add a comment field, and the comment there will be uploaded to Practice_Met
 
 ## Task 5: log the classifier parameters 
 1. log the classifier parameters defined in task 4 to Practice_Meta filed in the session json file in firebase.
+
+## Task 6: add an optional calibration routine
+1. add a calibration start/stop button under the advanced mode
+2. have an instruction text like "shoot 10 shots after 3 seconds from different locations, click stop when finish". feel free to make the instruction clear
+3. after the user click stop, the app will calculate over the data collected in the entire calibration session. 
+    a. max acceleration, after excluding the baseline (baseline is calculated by using the data in the first 3 seconds)
+    b. max ToF range, only for valid range 
+    c. min ToF range, only for valid range
+    d. max signal rate, only for valid range
+    e. min signal rate, only for valid range
+4. display the results extracted in step 3
+5. display the suggested parameter value
+    a. accel threshold = max_accel * 0.2
+    b. range threshold high = max tof range + 10mm
+    c. range threshold low = min tof range - 10mm
+    d. signal rate threshold = max signal rate * 0.2
+6. have another button "Apply suggetions" to apply these parameters to the classifier parameters. user can still override these parameters manually. The apply suggestion is optional

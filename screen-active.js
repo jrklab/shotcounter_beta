@@ -25,6 +25,11 @@ let latestDeviceTs_ms = 0;
 // BLE receiver — callbacks defined below so they reference the latest parser/classifier
 export const ble = new BLEReceiver(onBlePacket, onBleStatus);
 
+// ── Param calibrator tap ──────────────────────────────────────────────────────
+// Set by screen-setup.js when a calibration is running; cleared when done/cancelled.
+let _activeParamCal = null;
+export function setParamCalibrator(cal) { _activeParamCal = cal; }
+
 // ── Build classifier / detector configs from S.*Params ───────────────────────
 function buildClassicConfig() {
   const cfg = new ThresholdConfig();
@@ -264,6 +269,11 @@ function onBlePacket(dataView) {
   }
 
   if (!batch) return;
+
+  // Route to param calibrator when active (works on any screen)
+  if (_activeParamCal) {
+    for (const s of batch) _activeParamCal.push(s);
+  }
 
   // Always maintain sensorWindow — needed for Device Info baseline even when not in practice
   const hostNow = hostMs;

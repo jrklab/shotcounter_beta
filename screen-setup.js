@@ -2,8 +2,9 @@
 
 import { S }                       from './state.js';
 import { showScreen, showToast }   from './utils.js';
-import { ble, stopCamera, startPracticeSession } from './screen-active.js';
+import { ble, stopCamera, startPracticeSession, setParamCalibrator } from './screen-active.js';
 import { initAudio }               from './utils.js';
+import { ParamCalibrator }         from './param-calibrator.js';
 
 // ── Practice setup screen ─────────────────────────────────────────────────────
 export function wirePracticeSetup() {
@@ -107,6 +108,13 @@ export function wirePracticeSetup() {
 
   _syncParamPanels();
 
+  // ── Calibrate button ───────────────────────────────────────────────────────
+  document.getElementById('calib-start-btn')?.addEventListener('click', () => {
+    if (!S.isBleConnected) { showToast('Connect BLE first.', 'error'); return; }
+    _startCalibration();
+  });
+  _wireCalibOverlay();
+
   function updateReadyGate() {
     if (startBtn) startBtn.disabled = !(S.isBleConnected && S.videoEnabled);
   }
@@ -144,6 +152,139 @@ function _syncParamPanels() {
 function _setInput(id, val) {
   const el = document.getElementById(id);
   if (el) el.value = val;
+}
+
+// ── Calibration overlay ───────────────────────────────────────────────────────
+
+let _cal = null;
+
+function _showCalibPhase(phase) {
+  ['baseline', 'shooting', 'results'].forEach(p => {
+    const el = document.getElementById(`calib-phase-${p}`);
+    if (el) el.style.display = p === phase ? '' : 'none';
+  });
+}
+
+function _startCalibration() {
+  const overlay = document.getElementById('calib-overlay');
+  if (!overlay) return;
+
+  _cal = new ParamCalibrator();
+  setParamCalibrator(_cal);
+  overlay.style.display = 'flex';
+
+  _showCalibPhase('baseline');
+  const blBar    = document.getElementById('calib-bl-bar');
+  const tofEl    = document.getElementById('calib-tof-count');
+  const warnEl   = document.getElementById('calib-tof-warn');
+  const applyBtn = document.getElementById('calib-apply-btn');
+  const stopBtn  = document.getElementById('calib-stop-btn');
+  if (blBar)    blBar.style.width     = '0%';
+  if (tofEl)    tofEl.textContent     = '0';
+  if (warnEl)   warnEl.style.display  = 'none';
+  if (applyBtn) applyBtn.style.display = 'none';
+  if (stopBtn)  stopBtn.style.display  = 'none';
+
+  _cal.onBaselineProgress = fraction => {
+    if (blBar) blBar.style.width = `${Math.round(fraction * 100)}%`;
+  };
+
+  _cal.onShootingStart = () => {
+    _showCalibPhase('shooting');
+    if (tofEl)   tofEl.textContent    = '0';
+    if (stopBtn) stopBtn.style.display = '';
+  };
+
+  _cal.onTofCount = count => {
+    if (tofEl) tofEl.textContent = count;
+  };
+
+  _cal.onComplete = (suggestions, stats) => {
+    _showCalibPhase('results');
+    if (stopBtn) stopBtn.style.display = 'none';
+    if (stats.lowTofWarning && warnEl) {
+      warnEl.textContent = `Only ${stats.tofSampleCount} ball reading(s) collected (recommended ≥ ${_cal.MIN_TOF_READINGS}). ToF thresholds may be less accurate.`;
+      warnEl.style.display = '';
+    }
+    _renderCalibResults(suggestions, stats);
+    if (applyBtn) {
+      applyBtn.style.display = '';
+      applyBtn._suggestions  = suggestions;
+    }
+  };
+
+  _cal.start();
+}
+
+function _renderCalibResults(suggestions, stats) {
+  const grid = document.getElementById('calib-results-grid');
+  const note = document.getElementById('calib-stats-note');
+  if (!grid) return;
+
+  const currentParams = S.classifierMode === 'learned' ? S.detectorParams : S.classicParams;
+  const rows = [
+    ['Accel threshold (g)',  'IMPACT_ACCEL_THRESHOLD',      suggestions.IMPACT_ACCEL_THRESHOLD],
+    ['Range high (mm)',      'TOF_DISTANCE_THRESHOLD_HIGH', suggestions.TOF_DISTANCE_THRESHOLD_HIGH],
+    ['Range low (mm)',       'TOF_DISTANCE_THRESHOLD_LOW',  suggestions.TOF_DISTANCE_THRESHOLD_LOW],
+    ['Signal rate',          'TOF_SIGNAL_RATE_THRESHOLD',   suggestions.TOF_SIGNAL_RATE_THRESHOLD],
+  ];
+
+  grid.innerHTML = rows.map(([label, key, suggested]) => `
+    <span class="param-label">${label}</span>
+    <span class="calib-current">${currentParams[key]}</span>
+    <span class="calib-arrow">→</span>
+    <span class="calib-suggested">${suggested}</span>
+  `).join('');
+
+  const rawEl = document.getElementById('calib-raw-stats');
+  if (rawEl) {
+    const na = '—';
+    const fmt = v => v !== null ? v : na;
+    const blNote = stats.tofBaselineDist ? ` (baseline ${stats.tofBaselineDist} mm)` : '';
+    rawEl.innerHTML = [
+      `<span class="calib-stat-label">Max accel (g)</span><span class="calib-stat-value">${fmt(stats.maxAccel)}</span>`,
+      `<span class="calib-stat-label">Max range (mm)</span><span class="calib-stat-value">${fmt(stats.maxTof)}</span>`,
+      `<span class="calib-stat-label">Min range (mm)</span><span class="calib-stat-value">${fmt(stats.minTof)}</span>`,
+      `<span class="calib-stat-label">Max signal rate</span><span class="calib-stat-value">${fmt(stats.maxSR)}</span>`,
+      `<span class="calib-stat-label">Min signal rate</span><span class="calib-stat-value">${fmt(stats.minSR)}</span>`,
+    ].join('');
+  }
+
+  if (note) {
+    const blNote  = stats.tofBaselineDist ? ` · baseline ${stats.tofBaselineDist} mm` : '';
+    const accNote = stats.accelSampleCount ? ` · ${stats.accelSampleCount} accel samples` : '';
+    note.textContent = `${stats.tofSampleCount} ball reading(s)${accNote}${blNote}`;
+  }
+}
+
+function _closeCalibOverlay() {
+  setParamCalibrator(null);
+  _cal?.cancel();
+  _cal = null;
+  const overlay = document.getElementById('calib-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+// Wire static overlay buttons (called once from wirePracticeSetup)
+function _wireCalibOverlay() {
+  document.getElementById('calib-cancel-btn')?.addEventListener('click', _closeCalibOverlay);
+
+  document.getElementById('calib-stop-btn')?.addEventListener('click', () => {
+    if (!_cal) return;
+    _cal.stop();
+  });
+
+  document.getElementById('calib-apply-btn')?.addEventListener('click', () => {
+    const btn = document.getElementById('calib-apply-btn');
+    const suggestions = btn?._suggestions;
+    if (!suggestions) return;
+    // Apply to both param objects — same physical measurements benefit both classifiers
+    Object.assign(S.classicParams,  suggestions);
+    Object.assign(S.detectorParams, suggestions);
+    _syncParamPanels();
+    _closeCalibOverlay();
+    showToast('Calibrated parameters applied.', 'info');
+  });
 }
 
 export function resetPracticeSetup() {
