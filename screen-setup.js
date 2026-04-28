@@ -223,17 +223,18 @@ function _renderCalibResults(suggestions, stats) {
 
   const currentParams = S.classifierMode === 'learned' ? S.detectorParams : S.classicParams;
   const rows = [
-    ['Accel threshold (g)',  'IMPACT_ACCEL_THRESHOLD',      suggestions.IMPACT_ACCEL_THRESHOLD],
-    ['Range high (mm)',      'TOF_DISTANCE_THRESHOLD_HIGH', suggestions.TOF_DISTANCE_THRESHOLD_HIGH],
-    ['Range low (mm)',       'TOF_DISTANCE_THRESHOLD_LOW',  suggestions.TOF_DISTANCE_THRESHOLD_LOW],
-    ['Signal rate',          'TOF_SIGNAL_RATE_THRESHOLD',   suggestions.TOF_SIGNAL_RATE_THRESHOLD],
+    ['Accel threshold (g)',  'IMPACT_ACCEL_THRESHOLD'],
+    ['Range high (mm)',      'TOF_DISTANCE_THRESHOLD_HIGH'],
+    ['Range low (mm)',       'TOF_DISTANCE_THRESHOLD_LOW'],
+    ['Signal rate',          'TOF_SIGNAL_RATE_THRESHOLD'],
   ];
 
-  grid.innerHTML = rows.map(([label, key, suggested]) => `
+  grid.innerHTML = rows.map(([label, key]) => `
     <span class="param-label">${label}</span>
     <span class="calib-current">${currentParams[key]}</span>
     <span class="calib-arrow">→</span>
-    <span class="calib-suggested">${suggested}</span>
+    <span class="calib-suggested">${suggestions.classic[key]}</span>
+    <span class="calib-suggested-learned">${suggestions.learned[key]}</span>
   `).join('');
 
   const rawEl = document.getElementById('calib-raw-stats');
@@ -278,9 +279,8 @@ function _wireCalibOverlay() {
     const btn = document.getElementById('calib-apply-btn');
     const suggestions = btn?._suggestions;
     if (!suggestions) return;
-    // Apply to both param objects — same physical measurements benefit both classifiers
-    Object.assign(S.classicParams,  suggestions);
-    Object.assign(S.detectorParams, suggestions);
+    Object.assign(S.classicParams,  suggestions.classic);
+    Object.assign(S.detectorParams, suggestions.learned);
     _syncParamPanels();
     _closeCalibOverlay();
     showToast('Calibrated parameters applied.', 'info');

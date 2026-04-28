@@ -237,18 +237,19 @@ html, body {
 }
 
 .calib-results-header {
-  display: grid; grid-template-columns: 1fr auto auto auto;
+  display: grid; grid-template-columns: 1fr auto auto auto auto;
   gap: 4px 10px; font-size: 0.72rem; color: var(--muted);
   text-transform: uppercase; letter-spacing: 0.05em;
 }
 .calib-col-hdr { text-align: right; }
 .calib-results-grid {
-  display: grid; grid-template-columns: 1fr auto auto auto;
+  display: grid; grid-template-columns: 1fr auto auto auto auto;
   align-items: center; gap: 6px 10px;
 }
-.calib-current   { font-size: 0.82rem; color: var(--muted); text-align: right; }
-.calib-arrow     { font-size: 0.82rem; color: var(--muted); }
-.calib-suggested { font-size: 0.82rem; color: var(--make); font-weight: 700; text-align: right; }
+.calib-current          { font-size: 0.82rem; color: var(--muted); text-align: right; }
+.calib-arrow            { font-size: 0.82rem; color: var(--muted); }
+.calib-suggested        { font-size: 0.82rem; color: var(--make);  font-weight: 700; text-align: right; }
+.calib-suggested-learned { font-size: 0.82rem; color: #5bb8ff;     font-weight: 700; text-align: right; }
 
 .calib-raw-label {
   font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;

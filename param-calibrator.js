@@ -188,12 +188,23 @@ export class ParamCalibrator {
       srThr   = 500;
     }
 
-    const suggestions = {
+    const classicSuggestions = {
       IMPACT_ACCEL_THRESHOLD:      accelThr,
       TOF_DISTANCE_THRESHOLD_HIGH: tofHigh,
       TOF_DISTANCE_THRESHOLD_LOW:  tofLow,
       TOF_SIGNAL_RATE_THRESHOLD:   srThr,
     };
+
+    // Learned classifier uses wider ToF gates (effectively no range restriction)
+    // and lower trigger thresholds so the CNN sees more candidate windows.
+    const learnedSuggestions = {
+      IMPACT_ACCEL_THRESHOLD:      parseFloat((classicSuggestions.IMPACT_ACCEL_THRESHOLD * 0.6).toFixed(1)),
+      TOF_DISTANCE_THRESHOLD_HIGH: 1300,  // no upper range restriction
+      TOF_DISTANCE_THRESHOLD_LOW:  0,     // no lower range restriction
+      TOF_SIGNAL_RATE_THRESHOLD:   Math.round(classicSuggestions.TOF_SIGNAL_RATE_THRESHOLD * 0.6),
+    };
+
+    const suggestions = { classic: classicSuggestions, learned: learnedSuggestions };
 
     // ── Raw reference statistics ────────────────────────────────────────────
     const maxAccel = this._residualMags.length
