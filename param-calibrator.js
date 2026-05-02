@@ -103,16 +103,18 @@ export class ParamCalibrator {
   /** Feed one parsed sensor sample. */
   push(sample) {
     if (this._phase === 'idle' || this._phase === 'done') return;
-    const ts = sample.mpu_ts / 1000.0;
-    if (this._phase === 'baseline') this._collectBaseline(sample, ts);
+    if (this._phase === 'baseline') this._collectBaseline(sample);
     else                            this._collectSample(sample);
   }
 
   // ── Phase 1: baseline ──────────────────────────────────────────────────────
 
-  _collectBaseline(sample, ts) {
-    if (this._baselineStart === null) this._baselineStart = ts;
-    const elapsed = ts - this._baselineStart;
+  _collectBaseline(sample) {
+    // Use wall-clock time so the 3-second window is immune to stale or
+    // backwards device timestamps (e.g. after an ESP32 reboot mid-session).
+    const wallNow = performance.now() / 1000;
+    if (this._baselineStart === null) this._baselineStart = wallNow;
+    const elapsed = wallNow - this._baselineStart;
     this.onBaselineProgress?.(Math.min(elapsed / this.BASELINE_DURATION, 1));
 
     this._baselineAccels.push(sample.accel);

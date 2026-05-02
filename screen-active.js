@@ -396,6 +396,11 @@ function onShotDetected(shot, hostNow = performance.now(), latestDeviceTs_ms = n
 function onBleStatus(state, detail) {
   S.isBleConnected = state === 'connected';
 
+  // Reset the packet parser on every fresh BLE connection so that stale
+  // sequence numbers and a partially-filled _pending buffer from a previous
+  // session (or a device reboot) never block the next calibration run.
+  if (state === 'connected') parser.reset();
+
   const bleState = document.getElementById('setup-ble-state');
   const bleBtn   = document.getElementById('setup-ble-btn');
   if (bleState) {
