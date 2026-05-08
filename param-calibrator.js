@@ -8,19 +8,18 @@
  *   the resting ToF distance (sensor-to-rim).
  *
  * Phase 2 — Collection (runs until user calls stop()):
- *   Accumulates all residual accel magnitudes and all ball-over-sensor ToF
- *   readings. No shot detection — the user shoots freely and presses Stop.
+ *   Accumulates all residual accel magnitudes and all valid ToF readings.
+ *   No shot detection — the user shoots freely and presses Stop.
  *
- *   "Ball-over-sensor" readings: valid ToF samples whose distance is at least
- *   30 mm below the resting baseline distance.
+ *   "Valid" ToF readings: distance is not an error code and is > 0.
  *
  * Suggested values are computed as:
  *   IMPACT_ACCEL_THRESHOLD      = 10th-pct(residuals > 0.3 g) × 0.8  (floor 0.3 g)
- *   TOF_DISTANCE_THRESHOLD_HIGH = 95th-pct(ball_distances) + 20 mm
- *   TOF_DISTANCE_THRESHOLD_LOW  = 5th-pct(ball_distances)  − 20 mm  (floor 0)
- *   TOF_SIGNAL_RATE_THRESHOLD   = 10th-pct(ball_SRs) × 0.8
+ *   TOF_DISTANCE_THRESHOLD_HIGH = 95th-pct(shoot_distances) + 20 mm
+ *   TOF_DISTANCE_THRESHOLD_LOW  = 5th-pct(shoot_distances)  − 20 mm  (floor 0)
+ *   TOF_SIGNAL_RATE_THRESHOLD   = 10th-pct(shoot_SRs) × 0.8
  *
- * A warning is included in stats when fewer than MIN_TOF_READINGS (20) ball
+ * A warning is included in stats when fewer than MIN_TOF_READINGS (20) shooting
  * readings were collected, but results are always calculated.
  *
  * Callbacks:
@@ -119,7 +118,10 @@ export class ParamCalibrator {
 
     this._baselineAccels.push(sample.accel);
     const isValid = !INVALID_TOF.has(sample.distance) && sample.distance > 0;
-    if (isValid) this._baselineTof.push(sample.distance);
+    if (isValid) {
+      this._baselineTof.push(sample.distance);
+      this._baselineSRs.push(sample.signal_rate);
+    }
 
     if (elapsed >= this.BASELINE_DURATION) {
       this._finalizeBaseline();
@@ -154,16 +156,11 @@ export class ParamCalibrator {
     const mag = Math.sqrt(dx * dx + dy * dy + dz * dz);
     if (mag > 0.3) this._residualMags.push(mag);  // keep only above noise floor
 
-    // Ball-over-sensor: distance at least 30 mm below the resting baseline
+    // All valid ToF samples during the shooting phase
     if (isValid) {
-      const isBall = this._tofBaselineDist !== null
-        ? sample.distance < this._tofBaselineDist - 30
-        : true;  // no baseline distance available — accept all valid readings
-      if (isBall) {
-        this._ballDists.push(sample.distance);
-        this._ballSRs.push(sample.signal_rate);
-        this.onTofCount?.(this._ballDists.length);
-      }
+      this._shootDists.push(sample.distance);
+      this._shootSRs.push(sample.signal_rate);
+      this.onTofCount?.(this._shootDists.length);
     }
   }
 
@@ -179,10 +176,10 @@ export class ParamCalibrator {
 
     // ── ToF thresholds ───────────────────────────────────────────────────────
     let tofHigh, tofLow, srThr;
-    if (this._ballDists.length > 0) {
-      tofHigh = Math.round(_percentile(this._ballDists,  95) + 20);
-      tofLow  = Math.max(0, Math.round(_percentile(this._ballDists,   5) - 20));
-      srThr   = Math.round(_percentile(this._ballSRs,   10) * 0.8);
+    if (this._shootDists.length > 0) {
+      tofHigh = Math.round(_percentile(this._shootDists,  95) + 20);
+      tofLow  = Math.max(0, Math.round(_percentile(this._shootDists,   5) - 20));
+      srThr   = Math.round(_percentile(this._shootSRs,   10) * 0.8);
     } else {
       // Fallback to defaults if no ball readings were collected
       tofHigh = 360;
@@ -212,18 +209,31 @@ export class ParamCalibrator {
     const maxAccel = this._residualMags.length
       ? parseFloat(Math.max(...this._residualMags).toFixed(2))
       : null;
-    const maxTof = this._ballDists.length ? Math.max(...this._ballDists) : null;
-    const minTof = this._ballDists.length ? Math.min(...this._ballDists) : null;
-    const maxSR  = this._ballSRs.length   ? Math.max(...this._ballSRs)   : null;
-    const minSR  = this._ballSRs.length   ? Math.min(...this._ballSRs)   : null;
+
+    // Baseline ToF stats
+    const blMaxTof = this._baselineTof.length ? Math.max(...this._baselineTof) : null;
+    const blMinTof = this._baselineTof.length ? Math.min(...this._baselineTof) : null;
+    const blMaxSR  = this._baselineSRs.length ? Math.max(...this._baselineSRs) : null;
+    const blMinSR  = this._baselineSRs.length ? Math.min(...this._baselineSRs) : null;
+
+    // Shooting ToF stats
+    const maxTof = this._shootDists.length ? Math.max(...this._shootDists) : null;
+    const minTof = this._shootDists.length ? Math.min(...this._shootDists) : null;
+    const maxSR  = this._shootSRs.length   ? Math.max(...this._shootSRs)   : null;
+    const minSR  = this._shootSRs.length   ? Math.min(...this._shootSRs)   : null;
 
     const stats = {
-      tofSampleCount:   this._ballDists.length,
+      tofSampleCount:   this._shootDists.length,
       tofBaselineDist:  this._tofBaselineDist !== null ? Math.round(this._tofBaselineDist) : null,
       accelSampleCount: this._residualMags.length,
-      lowTofWarning:    this._ballDists.length < this.MIN_TOF_READINGS,
-      // Raw observed values for user reference
+      lowTofWarning:    this._shootDists.length < this.MIN_TOF_READINGS,
+      // Baseline observed values
       maxAccel,
+      blMaxTof,
+      blMinTof,
+      blMaxSR,
+      blMinSR,
+      // Shooting observed values
       maxTof,
       minTof,
       maxSR,
@@ -241,8 +251,9 @@ export class ParamCalibrator {
     this._accelBL        = { x: 0, y: 0, z: 0 };
     this._tofBaselineDist = null;
     this._residualMags   = [];
-    this._ballDists      = [];
-    this._ballSRs        = [];
+    this._shootDists     = [];
+    this._shootSRs       = [];
+    this._baselineSRs    = [];
   }
 }
 

@@ -241,20 +241,23 @@ function _renderCalibResults(suggestions, stats) {
   if (rawEl) {
     const na = '—';
     const fmt = v => v !== null ? v : na;
-    const blNote = stats.tofBaselineDist ? ` (baseline ${stats.tofBaselineDist} mm)` : '';
     rawEl.innerHTML = [
       `<span class="calib-stat-label">Max accel (g)</span><span class="calib-stat-value">${fmt(stats.maxAccel)}</span>`,
-      `<span class="calib-stat-label">Max range (mm)</span><span class="calib-stat-value">${fmt(stats.maxTof)}</span>`,
-      `<span class="calib-stat-label">Min range (mm)</span><span class="calib-stat-value">${fmt(stats.minTof)}</span>`,
-      `<span class="calib-stat-label">Max signal rate</span><span class="calib-stat-value">${fmt(stats.maxSR)}</span>`,
-      `<span class="calib-stat-label">Min signal rate</span><span class="calib-stat-value">${fmt(stats.minSR)}</span>`,
+      `<span class="calib-stat-label">Baseline max range (mm)</span><span class="calib-stat-value">${fmt(stats.blMaxTof)}</span>`,
+      `<span class="calib-stat-label">Baseline min range (mm)</span><span class="calib-stat-value">${fmt(stats.blMinTof)}</span>`,
+      `<span class="calib-stat-label">Baseline max signal rate</span><span class="calib-stat-value">${fmt(stats.blMaxSR)}</span>`,
+      `<span class="calib-stat-label">Baseline min signal rate</span><span class="calib-stat-value">${fmt(stats.blMinSR)}</span>`,
+      `<span class="calib-stat-label">Shooting max range (mm)</span><span class="calib-stat-value">${fmt(stats.maxTof)}</span>`,
+      `<span class="calib-stat-label">Shooting min range (mm)</span><span class="calib-stat-value">${fmt(stats.minTof)}</span>`,
+      `<span class="calib-stat-label">Shooting max signal rate</span><span class="calib-stat-value">${fmt(stats.maxSR)}</span>`,
+      `<span class="calib-stat-label">Shooting min signal rate</span><span class="calib-stat-value">${fmt(stats.minSR)}</span>`,
     ].join('');
   }
 
   if (note) {
     const blNote  = stats.tofBaselineDist ? ` · baseline ${stats.tofBaselineDist} mm` : '';
     const accNote = stats.accelSampleCount ? ` · ${stats.accelSampleCount} accel samples` : '';
-    note.textContent = `${stats.tofSampleCount} ball reading(s)${accNote}${blNote}`;
+    note.textContent = `${stats.tofSampleCount} shooting reading(s)${accNote}${blNote}`;
   }
 }
 

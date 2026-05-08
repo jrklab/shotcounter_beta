@@ -38,7 +38,10 @@ function buildClassicConfig() {
 }
 function buildDetectorConfig() {
   const cfg = new DetectorConfig();
-  Object.assign(cfg, S.detectorParams);
+  // In classic mode the detector and classifier share the same thresholds so
+  // the detector never fires on events the classifier would reject as NOT_SHOT.
+  // In learned mode the detector uses its own wider gates (detectorParams).
+  Object.assign(cfg, S.classifierMode === 'classic' ? S.classicParams : S.detectorParams);
   return cfg;
 }
 
