@@ -26,6 +26,7 @@ import { wireReviewScreen }                     from './screen-review.js';
 import { wireUploadOptions }                    from './screen-upload-options.js';
 import { wireHistoryScreen, loadHistory }       from './screen-history.js';
 import { wireOtaScreen, loadOtaScreen }         from './screen-ota.js';
+import { wireDataVizScreen }                    from './screen-dataviz.js';
 import { showScreen, showToast }                from './utils.js';
 import { S, APP_REVISION }                      from './state.js';
 import { signOut }                              from './auth.js';
@@ -39,6 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
   wireUploadOptions();
   wireHistoryScreen();
   wireOtaScreen();
+  wireDataVizScreen();
 
   // Dashboard navigation
   document.getElementById('dash-practice-btn')?.addEventListener('click', () => {

@@ -29,7 +29,7 @@
  *   onComplete(suggestions, stats) — called by stop(); always fires if in shooting phase
  */
 
-const INVALID_TOF = new Set([0xFFFE, 65534, 0xFFFF, 65535, 0]);
+
 
 // ── Stats helpers ──────────────────────────────────────────────────────────────
 
@@ -99,34 +99,51 @@ export class ParamCalibrator {
     else this._phase = 'idle';
   }
 
-  /** Feed one parsed sensor sample. */
-  push(sample) {
+  /** Feed one batch of separate MPU and ToF samples (post-filter). */
+  pushBatch(mpuBatch, tofBatch) {
     if (this._phase === 'idle' || this._phase === 'done') return;
-    if (this._phase === 'baseline') this._collectBaseline(sample);
-    else                            this._collectSample(sample);
+    for (const s of mpuBatch) this._processMpu(s);
+    for (const s of tofBatch) this._processTof(s);
   }
 
   // ── Phase 1: baseline ──────────────────────────────────────────────────────
 
-  _collectBaseline(sample) {
-    // Use wall-clock time so the 3-second window is immune to stale or
-    // backwards device timestamps (e.g. after an ESP32 reboot mid-session).
+  _processMpu(mpuS) {
+    if (this._phase === 'idle' || this._phase === 'done') return;
     const wallNow = performance.now() / 1000;
     if (this._baselineStart === null) this._baselineStart = wallNow;
     const elapsed = wallNow - this._baselineStart;
-    this.onBaselineProgress?.(Math.min(elapsed / this.BASELINE_DURATION, 1));
 
-    this._baselineAccels.push(sample.accel);
-    const isValid = !INVALID_TOF.has(sample.distance) && sample.distance > 0;
-    if (isValid) {
-      this._baselineTof.push(sample.distance);
-      this._baselineSRs.push(sample.signal_rate);
+    if (this._phase === 'baseline') {
+      this.onBaselineProgress?.(Math.min(elapsed / this.BASELINE_DURATION, 1));
+      this._baselineAccels.push(mpuS.accel);
+      if (elapsed >= this.BASELINE_DURATION) {
+        this._finalizeBaseline();
+        this._phase = 'shooting';
+        this.onShootingStart?.();
+      }
+    } else if (this._phase === 'shooting') {
+      const bl  = this._accelBL;
+      const dx  = mpuS.accel[0] - bl.x;
+      const dy  = mpuS.accel[1] - bl.y;
+      const dz  = mpuS.accel[2] - bl.z;
+      const mag = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (mag > 0.3) this._residualMags.push(mag);
     }
+  }
 
-    if (elapsed >= this.BASELINE_DURATION) {
-      this._finalizeBaseline();
-      this._phase = 'shooting';
-      this.onShootingStart?.();
+  _processTof(tofS) {
+    if (this._phase === 'idle' || this._phase === 'done') return;
+    const isValid = !tofS.isOor && tofS.distance > 0;
+    if (!isValid) return;
+
+    if (this._phase === 'baseline') {
+      this._baselineTof.push(tofS.distance);
+      this._baselineSRs.push(tofS.sr);
+    } else if (this._phase === 'shooting') {
+      this._shootDists.push(tofS.distance);
+      this._shootSRs.push(tofS.sr);
+      this.onTofCount?.(this._shootDists.length);
     }
   }
 
@@ -144,25 +161,7 @@ export class ParamCalibrator {
       : null;
   }
 
-  // ── Phase 2: continuous collection ────────────────────────────────────────
-
-  _collectSample(sample) {
-    const isValid = !INVALID_TOF.has(sample.distance) && sample.distance > 0;
-
-    // Residual accel magnitude
-    const dx  = sample.accel[0] - this._accelBL.x;
-    const dy  = sample.accel[1] - this._accelBL.y;
-    const dz  = sample.accel[2] - this._accelBL.z;
-    const mag = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    if (mag > 0.3) this._residualMags.push(mag);  // keep only above noise floor
-
-    // All valid ToF samples during the shooting phase
-    if (isValid) {
-      this._shootDists.push(sample.distance);
-      this._shootSRs.push(sample.signal_rate);
-      this.onTofCount?.(this._shootDists.length);
-    }
-  }
+  // ── Phase 2 finalise ──────────────────────────────────────────────────────
 
   _finalize() {
     this._phase = 'done';

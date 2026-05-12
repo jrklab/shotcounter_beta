@@ -45,24 +45,48 @@ class BaselineCalibrator {
     );
   }
 
-  /** @returns {boolean} true the moment calibration finishes */
-  addSample(accel, gyro, distance, signalRate, timestampSec) {
+  /**
+   * Feed one MPU sample.
+   * Uses device timestamp (ts in ms) for duration tracking.
+   * @returns {boolean} true the moment calibration finishes
+   */
+  addMpu(accel, gyro, ts) {
     if (this._complete) return false;
 
-    const t = timestampSec ?? (performance.now() / 1000);
+    const tSec = (ts != null) ? ts / 1000.0 : (performance.now() / 1000);
     if (this._startTime === null) {
-      this._startTime     = t;
+      this._startTime     = tSec;
       this._wallStartTime = performance.now() / 1000;
     }
 
-    if (t - this._startTime >= BaselineCalibrator.CALIBRATION_DURATION)
+    if (tSec - this._startTime >= BaselineCalibrator.CALIBRATION_DURATION)
       return this._finalize();
 
     this._ax.push(accel[0]); this._ay.push(accel[1]); this._az.push(accel[2]);
     this._gx.push(gyro[0]);  this._gy.push(gyro[1]);  this._gz.push(gyro[2]);
-    if (distance !== 0xFFFE && distance !== 65534)
-      this._sr.push(signalRate);
     return false;
+  }
+
+  /**
+   * Feed one ToF sample (called independently from the ToF stream).
+   * @param {number} distance  raw distance (0xFFFF = OOR, skip)
+   * @param {number} signalRate
+   */
+  addTof(distance, signalRate) {
+    if (this._complete) return;
+    if (distance !== 0xFFFF && distance !== 65535 && distance > 0)
+      this._sr.push(signalRate);
+  }
+
+  /**
+   * Legacy combined API — used by ShotClassifier; kept for backward compat.
+   * @returns {boolean} true the moment calibration finishes
+   */
+  addSample(accel, gyro, distance, signalRate, timestampSec) {
+    if (this._complete) return false;
+    const done = this.addMpu(accel, gyro, timestampSec != null ? timestampSec * 1000 : null);
+    this.addTof(distance, signalRate);
+    return done;
   }
 
   // ── internal ──────────────────────────────────────────────────────────────

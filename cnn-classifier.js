@@ -137,21 +137,21 @@ export class LearnedClassifier {
       // Build raw IMU channel arrays in ALL_IMU_FEATURES order
       const imuRawCh = [];
       if (imuFeat.includes('accel_xyz')) {
-        imuRawCh.push(scene.imu.map(s => s.sample.accel[0] - (cal.accelX ?? 0)));
-        imuRawCh.push(scene.imu.map(s => s.sample.accel[1] - (cal.accelY ?? 0)));
-        imuRawCh.push(scene.imu.map(s => s.sample.accel[2] - (cal.accelZ ?? 0)));
+        imuRawCh.push(scene.imu.map(s => s.accel[0] - (cal.accelX ?? 0)));
+        imuRawCh.push(scene.imu.map(s => s.accel[1] - (cal.accelY ?? 0)));
+        imuRawCh.push(scene.imu.map(s => s.accel[2] - (cal.accelZ ?? 0)));
       }
       if (imuFeat.includes('accel_mag')) {
         imuRawCh.push(scene.imu.map(s => s.mag));  // baseline-subtracted mag
       }
       if (imuFeat.includes('gyro_xyz')) {
-        imuRawCh.push(scene.imu.map(s => s.sample.gyro[0]));
-        imuRawCh.push(scene.imu.map(s => s.sample.gyro[1]));
-        imuRawCh.push(scene.imu.map(s => s.sample.gyro[2]));
+        imuRawCh.push(scene.imu.map(s => s.gyro[0]));
+        imuRawCh.push(scene.imu.map(s => s.gyro[1]));
+        imuRawCh.push(scene.imu.map(s => s.gyro[2]));
       }
       if (imuFeat.includes('gyro_mag')) {
         imuRawCh.push(scene.imu.map(s => Math.sqrt(
-          s.sample.gyro[0] ** 2 + s.sample.gyro[1] ** 2 + s.sample.gyro[2] ** 2)));
+          s.gyro[0] ** 2 + s.gyro[1] ** 2 + s.gyro[2] ** 2)));
       }
 
       // ── Resample onto uniform grids ─────────────────────────────────────

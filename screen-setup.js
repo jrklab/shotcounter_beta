@@ -2,7 +2,7 @@
 
 import { S }                       from './state.js';
 import { showScreen, showToast }   from './utils.js';
-import { ble, stopCamera, startPracticeSession, setParamCalibrator } from './screen-active.js';
+import { ble, stopCamera, startPracticeSession, setParamCalibrator, resetFilters } from './screen-active.js';
 import { initAudio }               from './utils.js';
 import { ParamCalibrator }         from './param-calibrator.js';
 
@@ -83,13 +83,31 @@ export function wirePracticeSetup() {
     advToggle.addEventListener('change', () => {
       S.advancedMode = advToggle.checked;
       if (!S.advancedMode) {
-        // Reset params to defaults
-        Object.assign(S.classicParams,  { IMPACT_ACCEL_THRESHOLD: 1, TOF_DISTANCE_THRESHOLD_HIGH: 360,  TOF_DISTANCE_THRESHOLD_LOW: 60, TOF_SIGNAL_RATE_THRESHOLD: 500 });
-        Object.assign(S.detectorParams, { IMPACT_ACCEL_THRESHOLD: 1, TOF_DISTANCE_THRESHOLD_HIGH: 1300, TOF_DISTANCE_THRESHOLD_LOW: 0,  TOF_SIGNAL_RATE_THRESHOLD: 500 });
+        const filterEnabled = S.filterConfig.mpuEnabled || S.filterConfig.tofEnabled;
+        _applyFilterDefaults(filterEnabled);
       }
       _syncParamPanels();
     });
   }
+
+  // ── Filter config inputs ───────────────────────────────────────────────────
+  function _onFilterChange() {
+    S.filterConfig.mpuEnabled = document.getElementById('filter-mpu-enable')?.checked ?? true;
+    S.filterConfig.tofEnabled = document.getElementById('filter-tof-enable')?.checked ?? true;
+    S.filterConfig.mpuFc      = parseFloat(document.getElementById('filter-mpu-fc')?.value)  || 1.0;
+    S.filterConfig.tofFc      = parseFloat(document.getElementById('filter-tof-fc')?.value)  || 1.0;
+    if (!S.advancedMode) {
+      const filterEnabled = S.filterConfig.mpuEnabled || S.filterConfig.tofEnabled;
+      _applyFilterDefaults(filterEnabled);
+      _syncParamPanels();
+    }
+    resetFilters();
+  }
+  document.getElementById('filter-mpu-enable')?.addEventListener('change', _onFilterChange);
+  document.getElementById('filter-tof-enable')?.addEventListener('change', _onFilterChange);
+  document.getElementById('filter-mpu-fc')?.addEventListener('change', _onFilterChange);
+  document.getElementById('filter-tof-fc')?.addEventListener('change', _onFilterChange);
+  _syncFilterInputs();
 
   // ── Param inputs ───────────────────────────────────────────────────────────
   function _bindParam(id, obj, key) {
@@ -122,6 +140,17 @@ export function wirePracticeSetup() {
   window._updatePracticeReadyGate = updateReadyGate;
 }
 
+// ── Filter-aware threshold defaults ─────────────────────────────────────────
+function _applyFilterDefaults(filterEnabled) {
+  if (filterEnabled) {
+    Object.assign(S.classicParams,  { IMPACT_ACCEL_THRESHOLD: 0.5, TOF_DISTANCE_THRESHOLD_HIGH: 1300, TOF_DISTANCE_THRESHOLD_LOW: 5, TOF_SIGNAL_RATE_THRESHOLD: 300 });
+    Object.assign(S.detectorParams, { IMPACT_ACCEL_THRESHOLD: 0.5, TOF_DISTANCE_THRESHOLD_HIGH: 1300, TOF_DISTANCE_THRESHOLD_LOW: 5, TOF_SIGNAL_RATE_THRESHOLD: 300 });
+  } else {
+    Object.assign(S.classicParams,  { IMPACT_ACCEL_THRESHOLD: 1,   TOF_DISTANCE_THRESHOLD_HIGH: 360,  TOF_DISTANCE_THRESHOLD_LOW: 60, TOF_SIGNAL_RATE_THRESHOLD: 500 });
+    Object.assign(S.detectorParams, { IMPACT_ACCEL_THRESHOLD: 1,   TOF_DISTANCE_THRESHOLD_HIGH: 1300, TOF_DISTANCE_THRESHOLD_LOW: 0,  TOF_SIGNAL_RATE_THRESHOLD: 500 });
+  }
+}
+
 // ── Sync advanced panel visibility and populate inputs from state ─────────────
 function _syncParamPanels() {
   const panel     = document.getElementById('classifier-advanced-panel');
@@ -147,11 +176,24 @@ function _syncParamPanels() {
   _setInput('p-det-tof-high',     dp.TOF_DISTANCE_THRESHOLD_HIGH);
   _setInput('p-det-tof-low',      dp.TOF_DISTANCE_THRESHOLD_LOW);
   _setInput('p-det-sr',           dp.TOF_SIGNAL_RATE_THRESHOLD);
+  _syncFilterInputs();
 }
 
 function _setInput(id, val) {
   const el = document.getElementById(id);
   if (el) el.value = val;
+}
+
+function _syncFilterInputs() {
+  const cfg = S.filterConfig;
+  const mpuEn = document.getElementById('filter-mpu-enable');
+  const tofEn = document.getElementById('filter-tof-enable');
+  const mpuFc = document.getElementById('filter-mpu-fc');
+  const tofFc = document.getElementById('filter-tof-fc');
+  if (mpuEn) mpuEn.checked = cfg.mpuEnabled;
+  if (tofEn) tofEn.checked = cfg.tofEnabled;
+  if (mpuFc) mpuFc.value   = cfg.mpuFc;
+  if (tofFc) tofFc.value   = cfg.tofFc;
 }
 
 // ── Calibration overlay ───────────────────────────────────────────────────────

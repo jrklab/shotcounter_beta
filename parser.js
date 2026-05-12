@@ -40,22 +40,22 @@ const PKT_ID             = 0x4C49;  // 'L','I'
 export class PacketParser {
   constructor() {
     this._lastSeq = -1;
-    this._pending = [];     // {accel, gyro, distance, mpu_ts, tof_ts, signal_rate}
   }
 
   reset() {
     this._lastSeq = -1;
-    this._pending = [];
   }
 
   /**
    * Parse one BLE notification DataView.
-   * @returns {{ batch: Array|null, lostPackets: number, deviceInfo: Object|null }}
-   *   batch is null if the packet was stale/duplicate.
+   * @returns {{ mpuBatch: Array|null, tofBatch: Array, lostPackets: number, deviceInfo: Object|null }}
+   *   mpuBatch is null if the packet was stale/duplicate.
+   *   mpuBatch: [{accel:[3], gyro:[3], ts}]  (ts in ms, same as ESP32 pktTs)
+   *   tofBatch: [{distance, sr, ts, isOor}]  (real slots only; isOor=true for 0xFFFF readings)
    *   deviceInfo: { hwVersion, fwVersion, battMv, tempC } or null on bad packet.
    */
   parse(view) {
-    if (view.byteLength < 336) return { batch: null, lostPackets: 0, deviceInfo: null };
+    if (view.byteLength < 336) return { mpuBatch: null, tofBatch: [], lostPackets: 0, deviceInfo: null };
 
     // ── Validate packet identifier ────────────────────────────────────────
     const pktId = view.getUint16(0, false);
@@ -82,14 +82,14 @@ export class PacketParser {
       const gap = (seqId - this._lastSeq) & 0xFFFF;
       if (gap === 0 || (seqId < this._lastSeq &&
                         !(this._lastSeq > 60000 && seqId < 5000))) {
-        return { batch: null, lostPackets: 0, deviceInfo };   // stale / duplicate
+        return { mpuBatch: null, tofBatch: [], lostPackets: 0, deviceInfo };   // stale / duplicate
       }
       if (gap > 1) lostPackets = gap - 1;
     }
     this._lastSeq = seqId;
 
-    // ── MPU samples ───────────────────────────────────────────────────────
-    const mpuSamples = [];
+    // ── MPU samples → mpuBatch ───────────────────────────────────────────
+    const mpuBatch = [];
     for (let i = 0; i < numMpu; i++) {
       const off     = 19 + i * 14;
       const tsDelta = view.getUint16(off, false);
@@ -99,39 +99,26 @@ export class PacketParser {
       const gx = view.getInt16(off + 8,  false) / GYRO_SENSITIVITY;
       const gy = view.getInt16(off + 10, false) / GYRO_SENSITIVITY;
       const gz = view.getInt16(off + 12, false) / GYRO_SENSITIVITY;
-      mpuSamples.push({ accel: [ax, ay, az], gyro: [gx, gy, gz], ts: pktTs - tsDelta });
+      mpuBatch.push({ accel: [ax, ay, az], gyro: [gx, gy, gz], ts: pktTs - tsDelta });
     }
 
-    // ── TOF samples ───────────────────────────────────────────────────────
+    // ── TOF samples → tofBatch (real slots only, with OOR flag) ─────────
     const tofOff  = 19 + numMpu * 14;
     const numTof  = view.getUint8(tofOff);
-    const tofSamples = [];
-    for (let i = 0; i < TOF_SLOTS; i++) {
+    const tofBatch = [];
+    for (let i = 0; i < Math.min(numTof, TOF_SLOTS); i++) {
       const off      = tofOff + 1 + i * 6;
       const tsDelta  = view.getUint16(off,     false);
       const distance = view.getUint16(off + 2, false);
       const sr       = view.getUint16(off + 4, false);
-      if (i < numTof)
-        tofSamples.push({ distance, ts: pktTs - tsDelta, sr });
+      if (distance === 0xFFFE) continue;   // firmware dummy-fill — skip
+      const isOor = (distance === 0xFFFF);
+      tofBatch.push({ distance, sr, ts: pktTs - tsDelta, isOor });
     }
 
-    // ── Pair MPU + TOF ────────────────────────────────────────────────────
-    for (let i = 0; i < mpuSamples.length; i++) {
-      const { accel, gyro, ts: mpuTs } = mpuSamples[i];
-      let distance = 0xFFFE, tofTs = mpuTs, sr = 0;
-      if (i < tofSamples.length) {
-        ({ distance, ts: tofTs, sr } = tofSamples[i]);
-      }
-      this._pending.push({ accel, gyro, distance, mpu_ts: mpuTs, tof_ts: tofTs, signal_rate: sr });
-    }
-
-    // ── Return a batch when we have a full packet's worth ─────────────────
-    if (this._pending.length >= SAMPLES_PER_PACKET) {
-      const batch    = this._pending;
-      this._pending  = [];
-      return { batch, lostPackets, deviceInfo };
-    }
-    return { batch: null, lostPackets, deviceInfo };
+    if (mpuBatch.length === 0)
+      return { mpuBatch: null, tofBatch: [], lostPackets, deviceInfo };
+    return { mpuBatch, tofBatch, lostPackets, deviceInfo };
   }
 }
 

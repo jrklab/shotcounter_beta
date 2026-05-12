@@ -59,3 +59,10 @@ also add a comment field, and the comment there will be uploaded to Practice_Met
     c. range threshold low = min tof range - 10mm
     d. signal rate threshold = max signal rate * 0.2
 6. have another button "Apply suggetions" to apply these parameters to the classifier parameters. user can still override these parameters manually. The apply suggestion is optional
+
+## Task 7: Sensor sample filtering for MPU and ToF samples
+Port the design changes on ./android/ to ./web/, particularly the changes we in the past 24 hours, including: 
+1. Add filtering (high pass filter) for MPU and ToF samples. and add filter disable/enable and cutoff frequency setting
+2. do not pair MPU and TOF samples, keep them as separate streams, mpu_samples at 200Hz, and tof_samples at 40Hz. 
+3. on Device info page, remove "compute sensor baseline", and add "Data Visualization", port the design from ./android/ to ./web/
+

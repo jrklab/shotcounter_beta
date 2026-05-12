@@ -134,6 +134,23 @@
           <!-- Advanced params panel (hidden until toggle is ON) -->
           <div id="classifier-advanced-panel" style="display:none;margin-top:10px">
 
+            <!-- Filter config -->
+            <div class="param-panel" style="margin-bottom:8px">
+              <div class="param-grid">
+                <label class="param-label" for="filter-mpu-enable">MPU HPF</label>
+                <input type="checkbox" id="filter-mpu-enable" checked>
+
+                <label class="param-label" for="filter-mpu-fc">MPU cut-off (Hz)</label>
+                <input class="param-input" type="number" id="filter-mpu-fc" min="0.1" max="20" step="0.1" value="1.0">
+
+                <label class="param-label" for="filter-tof-enable">ToF HPF</label>
+                <input type="checkbox" id="filter-tof-enable" checked>
+
+                <label class="param-label" for="filter-tof-fc">ToF cut-off (Hz)</label>
+                <input class="param-input" type="number" id="filter-tof-fc" min="0.1" max="20" step="0.1" value="1.0">
+              </div>
+            </div>
+
             <button id="calib-start-btn" class="btn btn-dark btn-sm" style="width:100%;margin-bottom:8px">
               📐 Calibrate Parameters
             </button>
@@ -399,8 +416,7 @@
       </div>
 
       <!-- ── Sensor baseline ───────────────────────────────────────────────── -->
-      <button id="di-baseline-btn" class="btn btn-dark">📏&nbsp; Compute Sensor Baseline</button>
-      <div id="di-baseline-result" class="di-baseline-result"></div>
+      <button id="di-dataviz-btn" class="btn btn-dark">📊&nbsp; Data Visualization</button>
 
       <!-- ── Firmware update ───────────────────────────────────────────────── -->
       <div class="di-section-divider">Firmware Update</div>
@@ -435,6 +451,35 @@
 
   <!-- Chart.js (history trend chart) -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+  <!-- ════════════════════════════════════════════════════════════════ -->
+  <!-- DATA VISUALISATION                                             -->
+  <!-- ════════════════════════════════════════════════════════════════ -->
+  <div data-screen="data-viz" id="screen-data-viz">
+    <div class="dataviz-body">
+      <div class="screen-header">
+        <button id="dv-back-btn" class="btn btn-dark btn-sm">← Back</button>
+        <span class="screen-title">Sensor Data</span>
+      </div>
+
+      <div class="dataviz-chart-group">
+        <div class="dataviz-title">Accel Magnitude (g)</div>
+        <canvas id="dv-canvas-accel" class="dataviz-canvas"></canvas>
+      </div>
+      <div class="dataviz-chart-group">
+        <div class="dataviz-title">Gyro Magnitude (°/s)</div>
+        <canvas id="dv-canvas-gyro" class="dataviz-canvas"></canvas>
+      </div>
+      <div class="dataviz-chart-group">
+        <div class="dataviz-title">ToF Distance (mm, OOR = −1)</div>
+        <canvas id="dv-canvas-range" class="dataviz-canvas"></canvas>
+      </div>
+      <div class="dataviz-chart-group">
+        <div class="dataviz-title">ToF Signal Rate</div>
+        <canvas id="dv-canvas-sr" class="dataviz-canvas"></canvas>
+      </div>
+    </div>
+  </div>
 
   <!-- Main app (ESM — imports ble.js, parser.js, rule-classifier.js, auth.js, db.js, ota-ble.js) -->
   <script type="module" src="./app.js"></script>

@@ -50,7 +50,7 @@ export function wireOtaScreen() {
     showScreen('dashboard');
   });
   document.getElementById('ota-update-btn')?.addEventListener('click', runOtaUpdate);
-  document.getElementById('di-baseline-btn')?.addEventListener('click', computeBaseline);
+  document.getElementById('di-dataviz-btn')?.addEventListener('click', () => showScreen('data-viz'));
   document.getElementById('di-ble-btn')?.addEventListener('click', async () => {
     const btn = document.getElementById('di-ble-btn');
     if (S.isBleConnected) {
@@ -143,57 +143,4 @@ async function runOtaUpdate() {
   } finally {
     S.ota.disconnect();
   }
-}
-
-// ── Sensor baseline ───────────────────────────────────────────────────────────────
-function computeBaseline() {
-  const el = document.getElementById('di-baseline-result');
-  if (!el) return;
-
-  const allSamples = S.sensorWindow;
-  const MPU_WINDOW = 400;   // 2 s at 200 Hz
-  const MIN_MPU    = 10;
-  const MIN_TOF    = 5;
-
-  if (!allSamples || allSamples.length < MIN_MPU) {
-    el.innerHTML = '<span class="di-baseline-warn">⚠️ Connect device and wait for sensor data (need ≥10 samples).</span>';
-    return;
-  }
-
-  const win = allSamples.slice(-MPU_WINDOW);
-  const avg = (arr) => arr.reduce((s, v) => s + v, 0) / arr.length;
-
-  const acX = avg(win.map(s => s.accel?.[0] ?? 0));
-  const acY = avg(win.map(s => s.accel?.[1] ?? 0));
-  const acZ = avg(win.map(s => s.accel?.[2] ?? 0));
-  const gyX = avg(win.map(s => s.gyro?.[0]  ?? 0));
-  const gyY = avg(win.map(s => s.gyro?.[1]  ?? 0));
-  const gyZ = avg(win.map(s => s.gyro?.[2]  ?? 0));
-
-  // Identify ToF-paired samples (0xFFFE = no slot assigned by firmware)
-  // All paired samples are included regardless of distance value — only signal rate is needed
-  const tofSamples  = win.filter(s => s.distance !== 0xFFFE);
-  const hasToF      = tofSamples.length >= MIN_TOF;
-  // signal_rate is 9.7 fixed-point: divide by 128 to convert to MCPS, removed 1/128 to make it consistent
-  const signalRate  = hasToF ? avg(tofSamples.map(s => s.signal_rate)) : null;
-
-  const mpuLabel = `Accel (g) — ${win.length} samples`;
-  const tofLabel = hasToF ? `ToF Signal Rate — ${tofSamples.length} samples` : 'ToF Signal Rate';
-
-  el.innerHTML = `
-    <table class="di-baseline-table">
-      <thead><tr><th>${mpuLabel}</th><th>Gyro (°/s)</th></tr></thead>
-      <tbody>
-        <tr><td>X: ${acX.toFixed(4)}</td><td>X: ${gyX.toFixed(4)}</td></tr>
-        <tr><td>Y: ${acY.toFixed(4)}</td><td>Y: ${gyY.toFixed(4)}</td></tr>
-        <tr><td>Z: ${acZ.toFixed(4)}</td><td>Z: ${gyZ.toFixed(4)}</td></tr>
-      </tbody>
-      <thead><tr><th colspan="2">${tofLabel}</th></tr></thead>
-      <tbody>
-        ${hasToF
-          ? `<tr><td colspan="2">${signalRate.toFixed(3)}</td></tr>`
-          : `<tr><td colspan="2" class="di-baseline-warn">No valid ToF data</td></tr>`
-        }
-      </tbody>
-    </table>`;
 }

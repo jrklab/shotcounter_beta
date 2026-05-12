@@ -53,8 +53,13 @@ export const S = {
   reviewIndex:    0,
 
   // ── Sensor ─────────────────────────────────────────────────────────────────
-  sensorWindow:  [],    // rolling ~2 s window
-  allSensorData: [],    // full-session log for CSV (freed after upload)
+  // DataViz rolling windows (always maintained while BLE connected)
+  // MPU: ~10 s at 200 Hz = 2000 samples; ToF: ~10 s at 40 Hz = 400 samples
+  rawMpuWindow:  [],  // [{accel:[3], gyro:[3], ts}] — raw 200 Hz stream
+  rawTofWindow:  [],  // [{distance, sr, ts, isOor}] — raw 40 Hz stream
+  filtMpuWindow: [],  // [{accel:[3], gyro:[3], ts}] — filtered (empty if MPU filter off)
+  filtTofWindow: [],  // [{distance, sr, ts, isOor}] — filtered (empty if ToF filter off)
+  allSensorData: [],  // full-session log for CSV (freed after upload)
 
   // ── Video ──────────────────────────────────────────────────────────────────
   mediaStream:        null,
@@ -88,20 +93,31 @@ export const S = {
   // 'learned'  = ONNX dual-branch CNN (~2.02 s fixed latency)
   classifierMode: 'classic',
 
+  // ── HPF sensor filters ─────────────────────────────────────────────────────
+  // Applied to raw MPU / ToF streams before the classifier pipeline.
+  // When either filter is enabled, threshold defaults switch to filter-tuned values.
+  filterConfig: {
+    mpuEnabled: true,
+    mpuFc:      1.0,   // cut-off frequency in Hz
+    tofEnabled: true,
+    tofFc:      1.0,   // cut-off frequency in Hz
+  },
+
   // ── Classifier hyperparameters (advanced mode) ─────────────────────────────
-  // Values here are passed to ThresholdConfig / DetectorConfig when a session starts.
-  // Reset to these defaults whenever the advanced toggle is switched off.
+  // Filter-ON defaults (since filterConfig defaults to both enabled).
+  // Reset to filter-aware defaults whenever the advanced toggle is switched off
+  // or filterConfig changes while advancedMode = false.
   classicParams: {
-    IMPACT_ACCEL_THRESHOLD:      1,    // g above baseline
-    TOF_DISTANCE_THRESHOLD_HIGH: 360,  // mm
-    TOF_DISTANCE_THRESHOLD_LOW:  60,   // mm
-    TOF_SIGNAL_RATE_THRESHOLD:   500,
+    IMPACT_ACCEL_THRESHOLD:      0.5,   // g above baseline
+    TOF_DISTANCE_THRESHOLD_HIGH: 1300,  // mm
+    TOF_DISTANCE_THRESHOLD_LOW:  5,     // mm
+    TOF_SIGNAL_RATE_THRESHOLD:   300,
   },
   detectorParams: {
-    IMPACT_ACCEL_THRESHOLD:      1,    // g above baseline
-    TOF_DISTANCE_THRESHOLD_HIGH: 1300, // mm
-    TOF_DISTANCE_THRESHOLD_LOW:  0,    // mm
-    TOF_SIGNAL_RATE_THRESHOLD:   500,
+    IMPACT_ACCEL_THRESHOLD:      0.5,   // g above baseline
+    TOF_DISTANCE_THRESHOLD_HIGH: 1300,  // mm
+    TOF_DISTANCE_THRESHOLD_LOW:  5,     // mm
+    TOF_SIGNAL_RATE_THRESHOLD:   300,
   },
   advancedMode: false,
 

@@ -23,8 +23,6 @@
 
 import { PRE_S, POST_S } from './config.js';
 
-const INVALID_TOF = new Set([0xFFFE, 65534, 0xFFFF, 65535, 0]);
-
 // ── Configurable thresholds ──────────────────────────────────────────────────
 export class DetectorConfig {
   constructor() {
@@ -64,64 +62,83 @@ export class SceneDetector {
 
   // ── Public API ──────────────────────────────────────────────────────────────
 
-  /** Process one sensor sample (from parser batch). */
-  push(sample) {
+  /**
+   * Process one packet's MPU and ToF streams in timestamp order.
+   * Replaces the old push(sample) API.
+   * @param {Array<{accel:number[], gyro:number[], ts:number}>} mpuBatch
+   * @param {Array<{distance:number, sr:number, ts:number, isOor:boolean}>} tofBatch
+   */
+  pushBatch(mpuBatch, tofBatch) {
+    // Two-pointer merge: process MPU and ToF in timestamp order
+    let ti = 0;
+    for (const mpuS of mpuBatch) {
+      while (ti < tofBatch.length && tofBatch[ti].ts <= mpuS.ts) {
+        this._pushTof(tofBatch[ti++]);
+      }
+      this._pushMpu(mpuS);
+    }
+    while (ti < tofBatch.length) this._pushTof(tofBatch[ti++]);
+  }
+
+  _pushMpu(mpuS) {
     if (!this._cal.isComplete) return;
+    const mpuTs = mpuS.ts / 1000.0;  // ms → s
 
-    const mpuTs = sample.mpu_ts / 1000.0;  // ms → s
-    const tofTs = sample.tof_ts / 1000.0;
-    const isValidTof = !INVALID_TOF.has(sample.distance) && sample.distance > 0;
-
-    // Residual accel magnitude (using calibrated baseline)
-    const dx  = sample.accel[0] - this._cal.accelX;
-    const dy  = sample.accel[1] - this._cal.accelY;
-    const dz  = sample.accel[2] - this._cal.accelZ;
+    const dx  = mpuS.accel[0] - this._cal.accelX;
+    const dy  = mpuS.accel[1] - this._cal.accelY;
+    const dz  = mpuS.accel[2] - this._cal.accelZ;
     const mag = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
     if (this._state === 'IDLE') {
-      // ── Maintain pre-window ring buffer ─────────────────────────────────
-      this._imuBuf.push({ ts: mpuTs, mag, sample });
+      this._imuBuf.push({ ts: mpuTs, mag, accel: mpuS.accel, gyro: mpuS.gyro });
       this._pruneImuBuf(mpuTs);
-      if (isValidTof) {
-        this._tofBuf.push({ ts: tofTs, distance: sample.distance, signalRate: sample.signal_rate });
-        this._pruneTofBuf(tofTs);
+      if (mag > this._cfg.IMPACT_ACCEL_THRESHOLD) {
+        this._t0          = mpuTs;
+        this._triggerType = 'imu';
+        this._postImu     = [];
+        this._postTof     = [];
+        this._state       = 'COLLECTING';
       }
-
-      // ── Check trigger conditions ─────────────────────────────────────────
-      const cfg    = this._cfg;
-      const imuHit = mag > cfg.IMPACT_ACCEL_THRESHOLD;
-      const tofHit = isValidTof &&
-                    sample.signal_rate > cfg.TOF_SIGNAL_RATE_THRESHOLD &&
-                    sample.distance < cfg.TOF_DISTANCE_THRESHOLD_HIGH &&
-                    sample.distance > cfg.TOF_DISTANCE_THRESHOLD_LOW;
-
-      if (imuHit || tofHit) {
-        this._t0           = imuHit ? mpuTs : tofTs;
-        this._triggerType  = imuHit ? 'imu'  : 'tof';
-        this._postImu      = [];
-        this._postTof      = [];
-        this._state        = 'COLLECTING';
-      }
-
     } else if (this._state === 'COLLECTING') {
-      // ── Accumulate post-trigger samples ──────────────────────────────────
-      this._postImu.push({ ts: mpuTs, mag, sample });
-      if (isValidTof) {
-        this._postTof.push({ ts: tofTs, distance: sample.distance, signalRate: sample.signal_rate });
-      }
-
-      // Emit once we have POST_S of data past the trigger
-      if (mpuTs >= this._t0 + this._cfg.POST_S)
-        this._emitScene(mpuTs);
-
+      this._postImu.push({ ts: mpuTs, mag, accel: mpuS.accel, gyro: mpuS.gyro });
+      if (mpuTs >= this._t0 + this._cfg.POST_S) this._emitScene(mpuTs);
     } else if (this._state === 'BLACKOUT') {
-      // ── Wait out blackout period ─────────────────────────────────────────
       if (mpuTs >= this._blackoutEnd) {
-        this._state   = 'IDLE';
-        this._imuBuf  = [];
-        this._tofBuf  = [];
+        this._state  = 'IDLE';
+        this._imuBuf = [];
+        this._tofBuf = [];
       }
     }
+  }
+
+  _pushTof(tofS) {
+    if (!this._cal.isComplete) return;
+    const tofTs    = tofS.ts / 1000.0;  // ms → s
+    const isValid  = !tofS.isOor && tofS.distance > 0;
+    const cfg      = this._cfg;
+
+    if (this._state === 'IDLE') {
+      if (isValid) {
+        this._tofBuf.push({ ts: tofTs, distance: tofS.distance, signalRate: tofS.sr });
+        this._pruneTofBuf(tofTs);
+      }
+      const tofHit = isValid &&
+        tofS.sr > cfg.TOF_SIGNAL_RATE_THRESHOLD &&
+        tofS.distance < cfg.TOF_DISTANCE_THRESHOLD_HIGH &&
+        tofS.distance > cfg.TOF_DISTANCE_THRESHOLD_LOW;
+      if (tofHit) {
+        this._t0          = tofTs;
+        this._triggerType = 'tof';
+        this._postImu     = [];
+        this._postTof     = [];
+        this._state       = 'COLLECTING';
+      }
+    } else if (this._state === 'COLLECTING') {
+      if (isValid)
+        this._postTof.push({ ts: tofTs, distance: tofS.distance, signalRate: tofS.sr });
+      // Emit is driven by MPU time — no need to check here
+    }
+    // BLACKOUT: handled by _pushMpu
   }
 
   /** Reset to initial state (e.g. new session). */

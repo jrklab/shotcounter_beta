@@ -2,13 +2,14 @@
 
 import { BLEReceiver }                from './ble.js';
 import { PacketParser }               from './parser.js';
+import { MpuHighPassFilter, TofHighPassFilter } from './sensor_filter.js';
 import { BaselineCalibrator, ThresholdConfig,
          ClassicClassifier }          from './rule-classifier.js';
 import { SceneDetector, DetectorConfig } from './detector.js';
 import { LearnedClassifier }          from './cnn-classifier.js';
 import { storeSessionVideo }          from './video-store.js';
 import { S, VIDEO_TIMESLICE_MS, VIDEO_BITRATE,
-         SENSOR_WINDOW_SLOTS, IS_BETA }  from './state.js';
+         IS_BETA }                    from './state.js';
 import { showScreen, setEl, showToast, speak, initAudio } from './utils.js';
 import { showReviewScreen }           from './screen-review.js';
 
@@ -18,6 +19,19 @@ let calibrator  = new BaselineCalibrator();
 let detector    = new SceneDetector(calibrator);
 let classicCls  = new ClassicClassifier(calibrator);
 let learnedCls  = null;   // LearnedClassifier — created lazily on first use
+
+// ── HPF filter instances (null = disabled) ────────────────────────────────────
+let _mpuFilter = null;
+let _tofFilter = null;
+
+/** (Re-)create filter instances from S.filterConfig. Called on BLE connect and session start. */
+function _resetFilters() {
+  const cfg = S.filterConfig;
+  _mpuFilter = cfg.mpuEnabled ? new MpuHighPassFilter(cfg.mpuFc) : null;
+  _tofFilter = cfg.tofEnabled ? new TofHighPassFilter(cfg.tofFc) : null;
+}
+/** Exported so screen-setup.js can trigger a filter reset when config changes. */
+export function resetFilters() { _resetFilters(); }
 
 // Kept current in onBlePacket so handleScene can reference it
 let latestDeviceTs_ms = 0;
@@ -60,7 +74,10 @@ export function startPracticeSession() {
   S.sessionMakes     = 0;
   S.sessionTotal     = 0;
   S.sessionEvents    = [];
-  S.sensorWindow     = [];
+  S.rawMpuWindow     = [];
+  S.rawTofWindow     = [];
+  S.filtMpuWindow    = [];
+  S.filtTofWindow    = [];
   S.allSensorData    = [];
   S.allRawPackets    = [];
   S.battStartMv      = null;
@@ -82,6 +99,7 @@ export function startPracticeSession() {
     learnedCls.load();   // pre-warm ONNX model
   }
   parser.reset();
+  _resetFilters();
 
   showScreen('practice-active');
 
@@ -140,7 +158,10 @@ export function restartPracticeSession() {
   S.sessionMakes     = 0;
   S.sessionTotal     = 0;
   S.sessionEvents    = [];
-  S.sensorWindow     = [];
+  S.rawMpuWindow     = [];
+  S.rawTofWindow     = [];
+  S.filtMpuWindow    = [];
+  S.filtTofWindow    = [];
   S.allSensorData    = [];
   S.allRawPackets    = [];
   S.battStartMv      = null;
@@ -162,6 +183,7 @@ export function restartPracticeSession() {
     learnedCls.load();
   }
   parser.reset();
+  _resetFilters();
 
   if (S.mediaRecorder && S.mediaRecorder.state !== 'inactive') {
     try { S.mediaRecorder.stop(); } catch (_) {}
@@ -249,7 +271,7 @@ function onBlePacket(dataView) {
     S.allRawPackets.push({ hostMs, buffer });
   }
 
-  const { batch, lostPackets, deviceInfo } = parser.parse(dataView);
+  const { mpuBatch, tofBatch, lostPackets, deviceInfo } = parser.parse(dataView);
 
   // ── Packet loss tracking ────────────────────────────────────────────────────
   if (lostPackets > 0) {
@@ -265,45 +287,66 @@ function onBlePacket(dataView) {
       S.lastBattMv  = deviceInfo.battMv;
     }
     if (deviceInfo.tempC != null) S.lastTempC = deviceInfo.tempC;
-    // hw/fw version bytes in the packet are now RSVD zeros; use DIS values from window.deviceMeta
     S.deviceHwVer = window.deviceMeta?.hwRevision ?? '–';
     S.deviceFwVer = window.deviceMeta?.fwRevision ?? '–';
     updateDeviceInfoBar(deviceInfo);
   }
 
-  if (!batch) return;
+  if (!mpuBatch) return;
 
-  // Route to param calibrator when active (works on any screen)
-  if (_activeParamCal) {
-    for (const s of batch) _activeParamCal.push(s);
+  // ── Apply HPF filters ───────────────────────────────────────────────────────
+  const filtMpu = _mpuFilter ? _mpuFilter.process(mpuBatch) : mpuBatch;
+  const filtTof = _tofFilter ? _tofFilter.process(tofBatch) : tofBatch;
+
+  // ── Maintain DataViz rolling windows (always, not just during practice) ─────
+  const RAW_MPU_MAX  = 2000;
+  const RAW_TOF_MAX  = 400;
+  S.rawMpuWindow.push(...mpuBatch);
+  if (S.rawMpuWindow.length > RAW_MPU_MAX)
+    S.rawMpuWindow.splice(0, S.rawMpuWindow.length - RAW_MPU_MAX);
+  S.rawTofWindow.push(...tofBatch);
+  if (S.rawTofWindow.length > RAW_TOF_MAX)
+    S.rawTofWindow.splice(0, S.rawTofWindow.length - RAW_TOF_MAX);
+  if (_mpuFilter) {
+    S.filtMpuWindow.push(...filtMpu);
+    if (S.filtMpuWindow.length > RAW_MPU_MAX)
+      S.filtMpuWindow.splice(0, S.filtMpuWindow.length - RAW_MPU_MAX);
+  } else {
+    S.filtMpuWindow.length = 0;
+  }
+  if (_tofFilter) {
+    S.filtTofWindow.push(...filtTof);
+    if (S.filtTofWindow.length > RAW_TOF_MAX)
+      S.filtTofWindow.splice(0, S.filtTofWindow.length - RAW_TOF_MAX);
+  } else {
+    S.filtTofWindow.length = 0;
   }
 
-  // Always maintain sensorWindow — needed for Device Info baseline even when not in practice
-  const hostNow = hostMs;
-  batch.forEach(s => { s.host_ts = hostNow; });
-  S.sensorWindow.push(...batch);
-  if (S.sensorWindow.length > SENSOR_WINDOW_SLOTS) {
-    S.sensorWindow.splice(0, S.sensorWindow.length - SENSOR_WINDOW_SLOTS);
+  // ── Route to param calibrator when active ──────────────────────────────────
+  if (_activeParamCal) {
+    _activeParamCal.pushBatch(filtMpu, filtTof);
   }
 
   if (S.activeScreen !== 'practice-active') return;
 
-  latestDeviceTs_ms = batch[batch.length - 1].mpu_ts;
-  S.allSensorData.push(...batch);
+  latestDeviceTs_ms = mpuBatch[mpuBatch.length - 1].ts;
+  S.allSensorData.push(...mpuBatch);
 
-  for (const s of batch) {
+  for (const s of filtMpu) {
     if (!calibrator.isComplete) {
-      const done = calibrator.addSample(
-        s.accel, s.gyro, s.distance, s.signal_rate, s.mpu_ts / 1000.0);
+      const done = calibrator.addMpu(s.accel, s.gyro, s.ts);
       updateCalBar(calibrator.progress);
       if (done) {
         showCalibrationBar(false);
         setActiveEvent('baseline ready — detecting shots 🏀', '#2ecc71');
       }
     }
-    // detector.push() is a no-op until calibration is complete (guarded internally)
-    detector.push(s);
   }
+  for (const s of filtTof) {
+    calibrator.addTof(s.distance, s.sr);
+  }
+  // detector.pushBatch() is a no-op until calibration is complete (guarded internally)
+  detector.pushBatch(filtMpu, filtTof);
 }
 
 // ── Scene handler (fired by SceneDetector.onScene) ───────────────────────────
@@ -402,7 +445,7 @@ function onBleStatus(state, detail) {
   // Reset the packet parser on every fresh BLE connection so that stale
   // sequence numbers and a partially-filled _pending buffer from a previous
   // session (or a device reboot) never block the next calibration run.
-  if (state === 'connected') parser.reset();
+  if (state === 'connected') { parser.reset(); _resetFilters(); }
 
   const bleState = document.getElementById('setup-ble-state');
   const bleBtn   = document.getElementById('setup-ble-btn');
