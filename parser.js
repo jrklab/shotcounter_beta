@@ -35,7 +35,11 @@ const GYRO_SENSITIVITY   = 16.384;   // LSB/°/s for ±2000°/s
 const SAMPLES_PER_PACKET = 20;
 const TOF_SLOTS          = 6;        // fixed number of TOF slots per packet
 const BAT_MV_PER_LSB     = 20;       // battery encoding: batt_mv = batt_raw × 20
-const PKT_ID             = 0x4C49;  // 'L','I'
+const PKT_ID             = 0x4C45;  // 'L','E'  — little-endian format
+const PKT_ID_LEGACY_BE   = 0x4C49;  // 'L','I'  — legacy big-endian format
+// TLV pkt_type constants
+const PKT_TYPE_SENSOR        = 0x90;  // new TLV sensor stream
+const PKT_TYPE_SENSOR_LEGACY = 0x00;  // legacy RSVD sensor stream
 
 export class PacketParser {
   constructor() {
@@ -58,8 +62,19 @@ export class PacketParser {
     if (view.byteLength < 336) return { mpuBatch: null, tofBatch: [], lostPackets: 0, deviceInfo: null };
 
     // ── Validate packet identifier ────────────────────────────────────────
+    // Always read pkt_id as big-endian (raw byte comparison) to detect format.
     const pktId = view.getUint16(0, false);
-    if (pktId !== PKT_ID) return { batch: null, lostPackets: 0, deviceInfo: null };
+    let littleEndian;
+    if (pktId === PKT_ID)           littleEndian = true;   // 'LE' — new LE format
+    else if (pktId === PKT_ID_LEGACY_BE) littleEndian = false;  // 'LI' — legacy BE
+    else return { batch: null, lostPackets: 0, deviceInfo: null };
+
+    // Route on pkt_type (byte[2]): sensor data is 0x00 (legacy) or 0x90 (new TLV).
+    // Silently skip CONFIG responses that arrive on the DATA chr by mistake.
+    const pktType = view.getUint8(2);
+    if (pktType !== PKT_TYPE_SENSOR && pktType !== PKT_TYPE_SENSOR_LEGACY) {
+      return { mpuBatch: null, tofBatch: [], lostPackets: 0, deviceInfo: null };
+    }
 
     // ── Extended header ───────────────────────────────────────────────────
     const hwVersion = view.getUint8(4);
@@ -72,8 +87,8 @@ export class PacketParser {
     const deviceInfo = { hwVersion, fwVersion, battMv, tempC };
 
     // ── Sensor stream header ──────────────────────────────────────────────
-    const pktTs  = view.getUint32(12, false);
-    const seqId  = view.getUint16(16, false);
+    const pktTs  = view.getUint32(12, littleEndian);
+    const seqId  = view.getUint16(16, littleEndian);
     const numMpu = view.getUint8(18);
 
     // ── Sequence check ────────────────────────────────────────────────────
@@ -92,13 +107,13 @@ export class PacketParser {
     const mpuBatch = [];
     for (let i = 0; i < numMpu; i++) {
       const off     = 19 + i * 14;
-      const tsDelta = view.getUint16(off, false);
-      const ax = view.getInt16(off + 2,  false) / ACCEL_SENSITIVITY;
-      const ay = view.getInt16(off + 4,  false) / ACCEL_SENSITIVITY;
-      const az = view.getInt16(off + 6,  false) / ACCEL_SENSITIVITY;
-      const gx = view.getInt16(off + 8,  false) / GYRO_SENSITIVITY;
-      const gy = view.getInt16(off + 10, false) / GYRO_SENSITIVITY;
-      const gz = view.getInt16(off + 12, false) / GYRO_SENSITIVITY;
+      const tsDelta = view.getUint16(off, littleEndian);
+      const ax = view.getInt16(off + 2,  littleEndian) / ACCEL_SENSITIVITY;
+      const ay = view.getInt16(off + 4,  littleEndian) / ACCEL_SENSITIVITY;
+      const az = view.getInt16(off + 6,  littleEndian) / ACCEL_SENSITIVITY;
+      const gx = view.getInt16(off + 8,  littleEndian) / GYRO_SENSITIVITY;
+      const gy = view.getInt16(off + 10, littleEndian) / GYRO_SENSITIVITY;
+      const gz = view.getInt16(off + 12, littleEndian) / GYRO_SENSITIVITY;
       mpuBatch.push({ accel: [ax, ay, az], gyro: [gx, gy, gz], ts: pktTs - tsDelta });
     }
 
@@ -108,9 +123,9 @@ export class PacketParser {
     const tofBatch = [];
     for (let i = 0; i < Math.min(numTof, TOF_SLOTS); i++) {
       const off      = tofOff + 1 + i * 6;
-      const tsDelta  = view.getUint16(off,     false);
-      const distance = view.getUint16(off + 2, false);
-      const sr       = view.getUint16(off + 4, false);
+      const tsDelta  = view.getUint16(off,     littleEndian);
+      const distance = view.getUint16(off + 2, littleEndian);
+      const sr       = view.getUint16(off + 4, littleEndian);
       if (distance === 0xFFFE) continue;   // firmware dummy-fill — skip
       const isOor = (distance === 0xFFFF);
       tofBatch.push({ distance, sr, ts: pktTs - tsDelta, isOor });
